@@ -46,6 +46,16 @@ Este projeto utiliza uma stack moderna para garantir performance, escalabilidade
 
 ---
 
+## 🕒 Módulo de Gestão de Remunerados e Banco de Horas
+
+Além do atendimento ao público externo, o sistema integra uma solução robusta para a gestão interna de pessoal, suprindo uma lacuna tecnológica do Estado:
+
+- **Controle de Remunerados**: Gestão completa de servidores em regime de trabalho remunerado, permitindo o acompanhamento de escalas e atividades.
+- **Banco de Horas Digital**: Automatização do registro e saldo de horas dos servidores, eliminando controles manuais suscetíveis a erros.
+- **Transparência e Auditoria**: Registro histórico de todas as movimentações, facilitando a conferência pelo setor administrativo e garantindo maior precisão na gestão de recursos humanos.
+
+---
+
 ## ⚖️ Propriedade Intelectual e Direitos Autorais
 
 **Todos os direitos reservados.**
