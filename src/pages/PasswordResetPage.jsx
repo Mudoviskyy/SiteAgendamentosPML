@@ -1,0 +1,216 @@
+
+import React, { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Helmet } from 'react-helmet';
+import { Loader2, CheckCircle2, XCircle, Info } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
+import { useNavigate } from 'react-router-dom';
+
+const PasswordResetPage = () => {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sessionError, setSessionError] = useState(null);
+  const [ready, setReady] = useState(false);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const checkSession = async () => {
+      // Primary: Look for tokens in query string
+      let searchParams = new URLSearchParams(window.location.search);
+      let accessToken = searchParams.get('access_token');
+
+      // Secondary Fallback: If not in query string, parse from hash
+      if (!accessToken && window.location.hash.includes('access_token=')) {
+        const hashPart = window.location.hash.substring(window.location.hash.indexOf('access_token='));
+        const hashParams = new URLSearchParams(hashPart);
+        accessToken = hashParams.get('access_token');
+      }
+
+      // Small delay to allow Supabase detectSessionInUrl to process the URL
+      setTimeout(async () => {
+        const { data } = await supabase.auth.getSession();
+        
+        if (data?.session) {
+          // Clean the URL parameters for cleaner URL after session is established
+          if (window.location.search.includes('access_token=') || window.location.hash.includes('access_token=')) {
+             window.history.replaceState(null, '', window.location.pathname);
+          }
+          setReady(true);
+        } else {
+          setSessionError("Sessão inválida ou link de recuperação expirado.");
+        }
+      }, 500);
+    };
+
+    checkSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || session) {
+        setReady(true);
+        setSessionError(null);
+      }
+    });
+
+    return () => {
+      if (authListener && authListener.subscription) {
+        authListener.subscription.unsubscribe();
+      }
+    };
+  }, []);
+
+  const validatePassword = (pass) => {
+    const checks = {
+      length: pass.length >= 8,
+      upper: /[A-Z]/.test(pass),
+      number: /[0-9]/.test(pass),
+      special: /[!@#$%^&*()]/.test(pass)
+    };
+    return checks;
+  };
+
+  const passRequirements = validatePassword(password);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (password !== confirmPassword) {
+      toast({ title: "Erro", description: "As senhas não coincidem.", variant: "destructive" });
+      return;
+    }
+
+    if (!Object.values(passRequirements).every(Boolean)) {
+      toast({ title: "Senha Fraca", description: "Siga os requisitos abaixo do campo de senha.", variant: "destructive" });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso!",
+        description: "Senha alterada com sucesso. Redirecionando...",
+        className: "bg-[#2D5016] text-white",
+      });
+
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
+
+    } catch (error) {
+      console.error('Erro:', error.message);
+      toast({
+        title: "Falha na Redefinição",
+        description: error.message,
+        variant: "destructive",
+      });
+      setLoading(false);
+    }
+  };
+
+  if (sessionError && !ready) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full text-center p-6 border-t-4 border-red-500 shadow-xl">
+          <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-red-600 mb-2">Link Inválido</h2>
+          <p className="text-gray-600 mb-6">{sessionError}</p>
+          <Button onClick={() => navigate('/recuperar-senha')} className="bg-[#2D5016] text-white w-full hover:bg-[#1e3a10]">
+            Solicitar Novo Link
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Helmet><title>Nova Senha - PML</title></Helmet>
+      <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md">
+          <Card className="shadow-2xl border-0 overflow-hidden">
+            <div className="bg-[#2D5016] h-2 w-full" />
+            <CardContent className="pt-8 px-6 pb-8">
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="text-center mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Redefinir Senha</h2>
+                  <p className="text-sm text-gray-500 mt-2">Escolha uma nova senha forte para sua segurança.</p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-semibold text-gray-700">Nova Senha</label>
+                  <Input 
+                    type="password" 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                    placeholder="••••••••"
+                    required 
+                    className="h-11"
+                  />
+                  <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-100 space-y-2">
+                    <p className="text-xs font-bold text-gray-500 flex items-center gap-1 mb-1">
+                      <Info className="w-3 h-3" /> REQUISITOS:
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                      <RequirementItem label="8+ caracteres" met={passRequirements.length} />
+                      <RequirementItem label="Letra maiúscula" met={passRequirements.upper} />
+                      <RequirementItem label="Um número" met={passRequirements.number} />
+                      <RequirementItem label="Símbolo (!@#$)" met={passRequirements.special} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-sm font-semibold text-gray-700">Confirmar Senha</label>
+                  <Input 
+                    type="password" 
+                    value={confirmPassword} 
+                    onChange={(e) => setConfirmPassword(e.target.value)} 
+                    placeholder="••••••••"
+                    required 
+                    className="h-11"
+                  />
+                </div>
+
+                <Button 
+                  type="submit" 
+                  disabled={loading || !ready} 
+                  className="w-full bg-[#2D5016] hover:bg-[#1e3a10] text-white h-12 text-base transition-all shadow-md"
+                >
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="animate-spin h-5 w-5" /> Salvando...
+                    </div>
+                  ) : "Atualizar Senha"}
+                </Button>
+
+                {!ready && !sessionError && (
+                  <div className="flex justify-center items-center gap-2 pt-2">
+                    <Loader2 className="animate-spin h-4 w-4 text-amber-600" />
+                    <span className="text-xs text-amber-600 font-medium">Aguardando sessão...</span>
+                  </div>
+                )}
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </>
+  );
+};
+
+const RequirementItem = ({ label, met }) => (
+  <div className={`flex items-center gap-1.5 text-[11px] ${met ? 'text-green-600' : 'text-gray-400'}`}>
+    {met ? <CheckCircle2 className="w-3 h-3" /> : <div className="w-3 h-3 rounded-full border border-gray-300" />}
+    {label}
+  </div>
+);
+
+export default PasswordResetPage;
