@@ -63,6 +63,16 @@ const normalizeCheck = (text) => {
     .trim();
 };
 
+const fixEncoding = (text) => {
+  if (typeof text !== 'string') return text;
+  try {
+    if (text.includes('Ã') || text.includes('Â') || text.includes('Ã§') || text.includes('Ã£')) {
+      return decodeURIComponent(escape(text));
+    }
+  } catch (e) {}
+  return text;
+};
+
 const CarteirinhasAdmin = () => {
   const [carteirinhas, setCarteirinhas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -282,7 +292,23 @@ const CarteirinhasAdmin = () => {
       return;
     }
 
-    setSelectedCarteirinha(carteirinha);
+    let emailSolicitante = null;
+    if (carteirinha.usuario_id) {
+      try {
+        const { data: perfilData } = await supabase
+          .from('perfis')
+          .select('email')
+          .eq('id', carteirinha.usuario_id)
+          .maybeSingle();
+        if (perfilData) {
+          emailSolicitante = perfilData.email;
+        }
+      } catch (err) {
+        console.error('Erro ao buscar e-mail do solicitante:', err);
+      }
+    }
+
+    setSelectedCarteirinha({ ...carteirinha, email_solicitante: emailSolicitante });
     setLocalStatusAdmin(carteirinha.status_admin || 'neutro');
     setLocalObservacaoAdmin(carteirinha.observacao_admin || '');
 
@@ -767,17 +793,17 @@ const CarteirinhasAdmin = () => {
                     <div className="flex-1">
                       <p className="text-[10px] font-bold text-green-600/70 uppercase tracking-widest mb-1">Visitante / Requerente</p>
                       <p className="font-black text-gray-900 uppercase text-lg leading-tight mb-4">
-                        {selectedCarteirinha.nome}
+                        {fixEncoding(selectedCarteirinha.nome)}
                       </p>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-4">
                         <div className="space-y-0.5">
-                          <p className="text-[9px] font-bold text-green-600/70 uppercase tracking-wider">{getIdentificacaoLabel(selectedCarteirinha.tipo_identificacao)}</p>
-                          <p className="text-sm font-bold text-gray-700">{selectedCarteirinha.cpf}</p>
+                          <p className="text-[9px] font-bold text-green-600/70 uppercase tracking-wider">Parentesco</p>
+                          <p className="text-sm font-bold text-gray-700 uppercase">{fixEncoding(selectedCarteirinha.parentesco)}</p>
                         </div>
                         <div className="space-y-0.5">
-                          <p className="text-[9px] font-bold text-green-600/70 uppercase tracking-wider">Parentesco</p>
-                          <p className="text-sm font-bold text-gray-700 uppercase">{selectedCarteirinha.parentesco}</p>
+                          <p className="text-[9px] font-bold text-green-600/70 uppercase tracking-wider">{getIdentificacaoLabel(selectedCarteirinha.tipo_identificacao)}</p>
+                          <p className="text-sm font-bold text-gray-700">{selectedCarteirinha.cpf}</p>
                         </div>
                         <div className="space-y-0.5">
                           <p className="text-[9px] font-bold text-green-600/70 uppercase tracking-wider">Contato</p>
@@ -791,6 +817,12 @@ const CarteirinhasAdmin = () => {
                             <p className="text-sm font-bold text-gray-700">{formatDate(selectedCarteirinha.data_emissao)}</p>
                           </div>
                         )}
+                        <div className="space-y-0.5 sm:col-span-2 border-t border-green-200/50 pt-2">
+                          <p className="text-[9px] font-bold text-green-600/70 uppercase tracking-wider">E-mail do Solicitante</p>
+                          <p className="text-sm font-bold text-gray-700 lowercase break-all select-all">
+                            {selectedCarteirinha.email_solicitante || <span className="text-gray-400 italic text-xs">Não informado</span>}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -815,7 +847,7 @@ const CarteirinhasAdmin = () => {
                       <div className="flex-1">
                         <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Interno / Apenado</p>
                         <p className="font-black text-gray-900 uppercase text-lg leading-tight flex flex-wrap items-center gap-2">
-                          {selectedCarteirinha?.nome_apenado}
+                          {fixEncoding(selectedCarteirinha?.nome_apenado)}
                           {selectedCarteirinha?.matricula_preso && (
                             <span className="bg-blue-600 text-white px-2 py-0.5 rounded text-xs font-black shadow-sm">
                               {selectedCarteirinha.matricula_preso}
@@ -844,7 +876,7 @@ const CarteirinhasAdmin = () => {
                               <AlertCircle size={24} className="shrink-0 text-amber-600" />
                               <div className="text-left">
                                 <p className="text-xs font-black uppercase leading-none tracking-tight">Nome Divergente</p>
-                                <p className="text-[10px] leading-tight mt-1.5 font-bold uppercase">No PDF consta: <span className="text-amber-700">{validacaoPreso.data.nome}</span></p>
+                                <p className="text-[10px] leading-tight mt-1.5 font-bold uppercase">No PDF consta: <span className="text-amber-700">{fixEncoding(validacaoPreso.data.nome)}</span></p>
                               </div>
                             </div>
                           )
@@ -893,7 +925,7 @@ const CarteirinhasAdmin = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <p className="text-[10px] font-bold text-pink-500 uppercase">Nome do Menor</p>
-                        <p className="font-bold text-gray-900">{selectedCarteirinha.nome_menor || '—'}</p>
+                        <p className="font-bold text-gray-900">{fixEncoding(selectedCarteirinha.nome_menor) || '—'}</p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-pink-500 uppercase">Data de Nascimento</p>
@@ -979,7 +1011,36 @@ const CarteirinhasAdmin = () => {
                         return acc;
                       }, {});
 
-                      return Object.entries(documentosAgrupados).map(([tipo, arquivos]) => (
+                      const ordemDesejada = [
+                        'foto_3x4',
+                        'rg_frente',
+                        'rg_verso',
+                        'declaracao_residencia',
+                        'declaracao_vacina',
+                        'comprovante_parentesco',
+                        'comprovante_residencia',
+                        'responsavel_rg_frente',
+                        'responsavel_rg_verso',
+                        'menor_rg_frente',
+                        'menor_rg_verso',
+                        'documento_oficial_com_cpf',
+                        'certidao_casamento',
+                        'carteirinha_oficial',
+                        'certidao_nascimento',
+                        'documento_autorizacao_legal'
+                      ];
+
+                      const entradasOrdenadas = Object.entries(documentosAgrupados).sort(([tipoA], [tipoB]) => {
+                        const indexA = ordemDesejada.indexOf(tipoA);
+                        const indexB = ordemDesejada.indexOf(tipoB);
+                        
+                        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                        if (indexA !== -1) return -1;
+                        if (indexB !== -1) return 1;
+                        return tipoA.localeCompare(tipoB);
+                      });
+
+                      return entradasOrdenadas.map(([tipo, arquivos]) => (
                         <div key={tipo} className="p-3 bg-white rounded-lg border border-gray-200 shadow-sm">
                           <h4 className="font-bold text-[10px] text-gray-900 uppercase mb-2">
                             {formatarTipoDocumento(tipo)}

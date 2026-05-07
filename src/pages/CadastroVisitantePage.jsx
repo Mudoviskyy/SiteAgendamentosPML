@@ -197,6 +197,16 @@ const CadastroVisitantePage = () => {
         if (emailExists) setErrors(prev => ({ ...prev, email: 'Email já cadastrado no sistema' }));
       } catch (err) { console.error(err); }
     }
+
+    // Verificação antecipada de CPF/documento duplicado no blur (feedback antes do submit)
+    if (name === 'cpf' && value && validationResult?.isValid) {
+      try {
+        const docExists = await checkCPFExists(value, tipoIdentificacao);
+        if (docExists) {
+          setErrors(prev => ({ ...prev, cpf: 'Este documento já está cadastrado. Acesse sua conta ou use a recuperação de senha.' }));
+        }
+      } catch (err) { console.error(err); }
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -283,8 +293,12 @@ const CadastroVisitantePage = () => {
     } catch (err) {
       const msg = err?.message || "Não foi possível concluir o cadastro.";
       if (msg.includes("Documento já cadastrado") || msg.includes("duplicate key")) {
-        setErrors(prev => ({ ...prev, cpf: "Este documento já está cadastrado no sistema" }));
-        toast({ title: "Documento já cadastrado", description: "O documento já existe no sistema. Faça login ou utilize outro.", variant: "destructive" });
+        setErrors(prev => ({ ...prev, cpf: "Este documento já está cadastrado. Acesse sua conta ou use a recuperação de senha." }));
+        toast({ 
+          title: "Documento já cadastrado", 
+          description: "Este CPF/documento já existe no sistema. Faça login com sua conta existente ou use 'Esqueci a senha'.",
+          variant: "destructive"
+        });
       } else {
         setGeneralError(msg);
         toast({ title: "Erro no cadastro", description: msg, variant: "destructive" });

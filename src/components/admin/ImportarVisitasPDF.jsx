@@ -17,35 +17,18 @@ import { useToast } from '@/components/ui/use-toast';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
 
+// Este arquivo usa o relatorio 8.6 do ipen a fim de identificar visitas realizadas a uma detento e mostrar nos gráficos de metricas
+// o grafico de visitas realizadas e não realizadas.
+
 /** Normaliza texto removendo acentos para comparações seguras */
 const norm = (str) =>
   (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
 
-const ImportarVisitasPDF = ({ onComplete, mesesDisponiveis = [] }) => {
+const ImportarVisitasPDF = ({ onComplete }) => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [stats, setStats] = useState(null);
-  const [mesRef, setMesRef] = useState('');
   const { toast } = useToast();
-
-  const getMeses = () => {
-    if (mesesDisponiveis.length > 0) {
-      return mesesDisponiveis.map(m => {
-        const mesStr = String(m.mes).padStart(2, '0');
-        return { value: `${m.ano}-${mesStr}`, label: `${mesStr}/${m.ano} — (${m.total} agendamentos)` };
-      });
-    }
-    const meses = [];
-    const hoje = new Date();
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-      const ano = d.getFullYear();
-      const mes = String(d.getMonth() + 1).padStart(2, '0');
-      const nomesMes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-      meses.push({ value: `${ano}-${mes}`, label: `${nomesMes[d.getMonth()]} ${ano}` });
-    }
-    return meses;
-  };
 
   /**
    * Extrai itens de texto com suas coordenadas X,Y de todas as páginas.
@@ -115,7 +98,7 @@ const ImportarVisitasPDF = ({ onComplete, mesesDisponiveis = [] }) => {
     }
 
     // Ordena colunas por posição X
-    const sortedCols = Object.entries(columnX).sort(([,a], [,b]) => a - b);
+    const sortedCols = Object.entries(columnX).sort(([, a], [, b]) => a - b);
 
     // 2. Função para identificar a coluna de um item baseado em sua posição X
     const getColumn = (x) => {
@@ -254,6 +237,8 @@ const ImportarVisitasPDF = ({ onComplete, mesesDisponiveis = [] }) => {
 
       if (!nomeVisitante || !nomeDetento) continue;
 
+      const autoPeriodoRef = dataISO.substring(0, 7); // Ex: 2024-05
+
       resultado.push({
         data_visita: dataISO,
         hora_entrada: (reg.hora_entrada || '').replace(/[^\d:]/g, '').substring(0, 8),
@@ -267,7 +252,7 @@ const ImportarVisitasPDF = ({ onComplete, mesesDisponiveis = [] }) => {
         tipo_visita: tipoFinal,
         situacao: situacaoFinal,
         unidade: reg.unidade.trim() || null,
-        periodo_ref: periodoRef,
+        periodo_ref: autoPeriodoRef,
       });
     }
 
@@ -280,12 +265,6 @@ const ImportarVisitasPDF = ({ onComplete, mesesDisponiveis = [] }) => {
   };
 
   const handleFileUpload = async (event) => {
-    if (!mesRef) {
-      toast({ title: 'Mês Obrigatório', description: 'Selecione o mês de referência antes de fazer o upload.', variant: 'destructive' });
-      event.target.value = '';
-      return;
-    }
-
     const file = event.target.files[0];
     if (!file) return;
 
@@ -298,7 +277,7 @@ const ImportarVisitasPDF = ({ onComplete, mesesDisponiveis = [] }) => {
       console.log(`[ImportarVisitasPDF] ${allItems.length} itens de texto extraídos do PDF`);
 
       // 2. Parse por colunas
-      const todosRegistros = parseByColumns(allItems, mesRef);
+      const todosRegistros = parseByColumns(allItems);
 
       if (todosRegistros.length === 0) {
         throw new Error('Não foi possível identificar registros. Verifique se o PDF é o de "Visitas Realizadas" do IPEN.');
@@ -314,44 +293,28 @@ const ImportarVisitasPDF = ({ onComplete, mesesDisponiveis = [] }) => {
         throw new Error(`Encontrados ${todosRegistros.length} registros, mas nenhum "Concluída". Situações: ${detalhes}`);
       }
 
-      // 4. Deduplicação
-      const { data: existentes } = await supabase
-        .from('visitas_realizadas')
-        .select('nome_visitante_normalizado, matricula_detento, data_visita, hora_entrada')
-        .eq('periodo_ref', mesRef);
-
-      const chaveExistente = new Set(
-        (existentes || []).map(e => `${e.nome_visitante_normalizado}|${e.matricula_detento}|${e.data_visita}|${e.hora_entrada}`)
-      );
-
-      const novos = concluidas.filter(r => {
-        const chave = `${r.nome_visitante_normalizado}|${r.matricula_detento}|${r.data_visita}|${r.hora_entrada}`;
-        return !chaveExistente.has(chave);
-      });
-
-      if (novos.length === 0) {
-        toast({ title: 'Nenhum registro novo', description: `Todos os ${concluidas.length} registros já existem no banco.` });
-        setStats({ total: todosRegistros.length, concluidas: concluidas.length, ignoradas: todosRegistros.length - concluidas.length, novos: 0 });
-        setLoading(false);
-        return;
-      }
-
-      // 5. Insere em lotes
+      // 4. Insere em lotes (Deduplicação automática via constraint e ignoreDuplicates)
       const batchSize = 500;
-      for (let idx = 0; idx < novos.length; idx += batchSize) {
-        const batch = novos.slice(idx, idx + batchSize);
-        const { error: insError } = await supabase.from('visitas_realizadas').insert(batch);
+      let insertsTentados = 0;
+      
+      for (let idx = 0; idx < concluidas.length; idx += batchSize) {
+        const batch = concluidas.slice(idx, idx + batchSize);
+        const { error: insError } = await supabase
+          .from('visitas_realizadas')
+          .upsert(batch, { onConflict: 'matricula_detento,nome_visitante_normalizado,data_visita', ignoreDuplicates: true });
+          
         if (insError) throw insError;
+        insertsTentados += batch.length;
       }
 
       setStats({
         total: todosRegistros.length,
         concluidas: concluidas.length,
         ignoradas: todosRegistros.length - concluidas.length,
-        novos: novos.length,
+        novos: concluidas.length, // Aqui agora representa o total de válidas lidas, o banco decide se salva ou ignora
       });
 
-      toast({ title: 'Sucesso!', description: `${novos.length} visitas concluídas salvas para ${mesRef}.` });
+      toast({ title: 'Sucesso!', description: `Lidos ${concluidas.length} registros e cruzados de forma segura na base.` });
       if (onComplete) onComplete();
     } catch (error) {
       console.error('Erro no processamento:', error);
@@ -361,14 +324,12 @@ const ImportarVisitasPDF = ({ onComplete, mesesDisponiveis = [] }) => {
     }
   };
 
-  const mesesOptions = getMeses();
-
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setStats(null); }}>
       <DialogTrigger asChild>
         <Button variant="outline" className="flex items-center gap-2 border-dashed border-emerald-400 hover:border-emerald-600 hover:text-emerald-700 transition-all">
           <FileUp size={16} />
-          Importar Visitas Realizadas (PDF)
+          Importar Visitas Realizadas 8.6 (PDF)
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md bg-white" aria-describedby="import-visitas-desc">
@@ -405,32 +366,15 @@ const ImportarVisitasPDF = ({ onComplete, mesesDisponiveis = [] }) => {
               <div className="space-y-1">
                 <p className="text-sm font-medium text-gray-900">PDF de Visitas Realizadas (IPEN)</p>
                 <p className="text-xs text-gray-500 mb-2">
-                  Selecione o mês e anexe o PDF. Apenas visitas <strong>"Concluídas"</strong> serão salvas.
-                  Para meses com mais de 1.000, importe múltiplos PDFs.
+                  Anexe o PDF de múltiplas páginas gerado no IPEN (relatório 8.6). Apenas visitas <strong>"Concluídas"</strong> serão salvas.
+                  O sistema extrairá a data automaticamente de cada registro, permitindo a importação de históricos inteiros (ex: últimos 6 meses) sem duplicar.
                 </p>
-              </div>
-
-              <div className="w-full flex flex-col gap-2 my-2 text-left">
-                <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
-                  <CalendarDays size={14} />
-                  Mês de Referência
-                </label>
-                <Select value={mesRef} onValueChange={setMesRef}>
-                  <SelectTrigger className="w-full bg-gray-50 border-gray-200">
-                    <SelectValue placeholder="Selecione o mês" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-gray-200 shadow-xl">
-                    {mesesOptions.map((m) => (
-                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               <input type="file" accept=".pdf" className="hidden" id="visitas-pdf-upload" onChange={handleFileUpload} />
               <label htmlFor="visitas-pdf-upload" className="mt-2 w-full">
-                <Button asChild variant="default" className="bg-emerald-600 hover:bg-emerald-700 w-full" disabled={!mesRef}>
-                  <span className={`cursor-pointer text-white ${!mesRef ? 'opacity-50' : ''}`}>Carregar PDF e Gravar no Banco</span>
+                <Button asChild variant="default" className="bg-emerald-600 hover:bg-emerald-700 w-full">
+                  <span className="cursor-pointer text-white">Processar e Sincronizar Histórico</span>
                 </Button>
               </label>
             </div>

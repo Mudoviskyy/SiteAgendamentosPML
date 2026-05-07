@@ -29,6 +29,7 @@ const AgendamentosAdmin = () => {
   const [totalFilas, setTotalFilas] = useState(0);
 
   const [validacaoPreso, setValidacaoPreso] = useState({ loading: false, data: null });
+  const [alertasVisitante, setAlertasVisitante] = useState({ loading: false, data: null });
 
   // Paginação 
   const [page, setPage] = useState(0);
@@ -104,7 +105,8 @@ const AgendamentosAdmin = () => {
           .from('agendamentos')
           .select(` 
             *, 
-            vagas_configuracao!inner (data_visita, horario, galeria, tipo_visita) 
+            vagas_configuracao!inner (data_visita, horario, galeria, tipo_visita),
+            perfis ( carteirinhas ( parentesco, matricula_preso, menor_idade ) )
           `, { count: 'exact' });
 
         if (statusFiltro === 'todos') {
@@ -239,6 +241,26 @@ const AgendamentosAdmin = () => {
       }
     };
     checkValidacao();
+  }, [detailsModal.isOpen, detailsModal.data]);
+
+  // --- ALERTAS DO VISITANTE (MÚLTIPLAS FALTAS / CRUZADOS) ---
+  useEffect(() => {
+    const checkAlertas = async () => {
+      if (detailsModal.isOpen && detailsModal.data?.visitante1_nome) {
+        setAlertasVisitante({ loading: true, data: null });
+        try {
+          const { data, error } = await supabase.rpc('check_alertas_visitante', {
+            p_nome_visitante: normalizeCheck(detailsModal.data.visitante1_nome)
+          });
+          if (error) throw error;
+          setAlertasVisitante({ loading: false, data });
+        } catch (err) {
+          console.error("Erro ao buscar alertas:", err);
+          setAlertasVisitante({ loading: false, data: null });
+        }
+      }
+    };
+    checkAlertas();
   }, [detailsModal.isOpen, detailsModal.data]);
 
   const executeAction = async (id, novoStatus, motivoRecusa = null) => {
@@ -735,13 +757,56 @@ const AgendamentosAdmin = () => {
                   )}
                 </div>
               </div>
+
+              {/* Alertas do Visitante */}
+              {!alertasVisitante.loading && alertasVisitante.data && (alertasVisitante.data.faltas_6m > 0 || alertasVisitante.data.internos_distintos_2m > 1) && (
+                <div className="flex flex-col gap-2">
+                  <div className="text-[10px] text-gray-500 font-medium px-1 flex items-center gap-1">
+                    <Info size={12} className="text-gray-400" /> Para manter a precisão destes alertas, certifique-se de sincronizar o Relatório 8.6 todo mês.
+                  </div>
+                  {alertasVisitante.data.faltas_6m > 0 && (
+                    <div className="bg-red-50 text-red-800 px-4 py-3 rounded-xl border border-red-200 flex items-start gap-3 shadow-sm">
+                      <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-tight text-red-700">Aviso de Inadimplência (No-Show)</p>
+                        <p className="text-[11px] mt-0.5">
+                          Este visitante possui <span className="font-bold">{alertasVisitante.data.faltas_6m} falta(s)</span> em agendamentos anteriores (últimos 6 meses). Ele pode estar ocupando vagas indevidamente.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {alertasVisitante.data.internos_distintos_2m > 1 && (
+                    <div className="bg-amber-50 text-amber-800 px-4 py-3 rounded-xl border border-amber-200 flex items-start gap-3 shadow-sm">
+                      <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold uppercase tracking-tight text-amber-700">Alerta de Segurança (Cruzamento)</p>
+                        <p className="text-[11px] mt-0.5">
+                          Este visitante agendou visitas para <span className="font-bold">{alertasVisitante.data.internos_distintos_2m} detentos diferentes</span> nos últimos 2 meses. Risco de repasse/comércio.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                   <h4 className="text-[10px] font-bold uppercase text-gray-400 mb-2 border-b pb-1">Visitante 1 (Titular)</h4>
                   <p className="font-bold text-gray-900">{detailsModal.data.visitante1_nome}</p>
                   <p className="text-xs text-gray-600">CPF: {formatarCPF(detailsModal.data.visitante1_cpf || detailsModal.data.visitante1_carteirinha)}</p>
+                  {(() => {
+                    const cartTitular = detailsModal.data.perfis?.carteirinhas?.find(c => c.matricula_preso === detailsModal.data.matricula_preso && !c.menor_idade);
+                    if (cartTitular?.parentesco) {
+                      return (
+                        <p className="text-[11px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full inline-block mt-1">
+                          Vínculo: {cartTitular.parentesco}
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
                   {(detailsModal.data.email || detailsModal.data.p_email) && (
-                    <p className="text-xs text-gray-400 italic mt-0.5 break-all">
+                    <p className="text-xs text-gray-400 italic mt-1.5 break-all">
                       📧 {detailsModal.data.email || detailsModal.data.p_email}
                     </p>
                   )}
@@ -760,6 +825,17 @@ const AgendamentosAdmin = () => {
                     </h4>
                     <p className="font-bold text-gray-900">{detailsModal.data.visitante2_nome}</p>
                     <p className="text-xs text-gray-600 uppercase">Prontuário: {detailsModal.data.visitante2_carteirinha || '-'}</p>
+                    {(() => {
+                      const cartV2 = detailsModal.data.perfis?.carteirinhas?.find(c => c.matricula_preso === detailsModal.data.matricula_preso && (c.nome_menor === detailsModal.data.visitante2_nome || c.nome === detailsModal.data.visitante2_nome));
+                      if (cartV2?.parentesco) {
+                        return (
+                          <p className="text-[11px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full inline-block mt-1">
+                            Vínculo: {cartV2.parentesco}
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 )}
                 {detailsModal.data.visitante3_nome && (
@@ -769,6 +845,17 @@ const AgendamentosAdmin = () => {
                     </h4>
                     <p className="font-bold text-gray-900">{detailsModal.data.visitante3_nome}</p>
                     <p className="text-xs text-gray-600 uppercase">Prontuário: {detailsModal.data.visitante3_carteirinha || '-'}</p>
+                    {(() => {
+                      const cartV3 = detailsModal.data.perfis?.carteirinhas?.find(c => c.matricula_preso === detailsModal.data.matricula_preso && (c.nome_menor === detailsModal.data.visitante3_nome || c.nome === detailsModal.data.visitante3_nome));
+                      if (cartV3?.parentesco) {
+                        return (
+                          <p className="text-[11px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full inline-block mt-1">
+                            Vínculo: {cartV3.parentesco}
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 )}
               </div>

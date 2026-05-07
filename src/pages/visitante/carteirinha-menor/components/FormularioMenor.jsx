@@ -81,11 +81,11 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
     if (file) {
       const isImage = file.type.startsWith('image/');
       if (!isImage && file.type !== 'application/pdf') {
-        toast({ title: "Formato invÃ¡lido", description: "Envie apenas imagens (JPG/PNG) ou PDF.", variant: "destructive" });
+        toast({ title: "Formato inválido", description: "Envie apenas imagens (JPG/PNG) ou PDF.", variant: "destructive" });
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
-        toast({ title: "Arquivo muito grande", description: "O tamanho mÃ¡ximo permitido Ã© 5MB.", variant: "destructive" });
+        toast({ title: "Arquivo muito grande", description: "O tamanho máximo permitido é 5MB.", variant: "destructive" });
         return;
       }
       setDocumentos(prev => ({ ...prev, [tipo]: file }));
@@ -97,27 +97,27 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
   };
 
   const validarFormulario = () => {
-    if (!formData.nome_menor?.trim()) return "Nome do menor Ã© obrigatÃ³rio.";
-    if (!dataNascimento.dia || !dataNascimento.mes || !dataNascimento.ano) return "Data de nascimento do menor Ã© obrigatÃ³ria.";
+    if (!formData.nome_menor?.trim()) return "Nome do menor é obrigatório.";
+    if (!dataNascimento.dia || !dataNascimento.mes || !dataNascimento.ano) return "Data de nascimento do menor é obrigatória.";
     if (!formData.parentesco?.trim()) return "Selecione o seu parentesco com o menor.";
-    if (!formData.nome_apenado?.trim()) return "Nome do detento Ã© obrigatÃ³rio.";
+    if (!formData.nome_apenado?.trim()) return "Nome do detento é obrigatório.";
 
     if (fluxoAtivo === 'ja_tenho') {
-      if (!dataEmissao.dia || !dataEmissao.mes || !dataEmissao.ano) return "Data de emissÃ£o da carteirinha Ã© obrigatÃ³ria.";
-      if (!documentos.carteirinha_oficial) return "Ã‰ obrigatÃ³rio anexar a Carteirinha Oficial.";
+      if (!dataEmissao.dia || !dataEmissao.mes || !dataEmissao.ano) return "Data de emissão da carteirinha é obrigatória.";
+      if (!documentos.carteirinha_oficial) return "É obrigatório anexar a Carteirinha Oficial.";
     } else {
-      if (!documentos.foto_3x4) return "A foto 3x4 do menor Ã© obrigatÃ³ria.";
-      if (!documentos.responsavel_rg_frente) return "A frente do RG/CPF do responsÃ¡vel Ã© obrigatÃ³ria.";
-      if (!documentos.responsavel_rg_verso) return "O verso do RG/CPF do responsÃ¡vel Ã© obrigatÃ³rio.";
-      if (!documentos.menor_rg_frente) return "A frente do RG do menor Ã© obrigatÃ³ria.";
-      if (!documentos.menor_rg_verso) return "O verso do RG do menor Ã© obrigatÃ³rio.";
-      if (!documentos.certidao_nascimento) return "A certidÃ£o de nascimento do menor Ã© obrigatÃ³ria.";
-      if (!documentos.declaracao_vacina) return "A declaraÃ§Ã£o de vacina Ã© obrigatÃ³ria.";
-      if (formData.parentesco === 'AutorizaÃ§Ã£o Judicial' && !documentos.documento_autorizacao_legal) {
-        return "A AutorizaÃ§Ã£o Judicial / Guarda Ã© obrigatÃ³ria para este parentesco.";
+      if (!documentos.foto_3x4) return "A foto 3x4 do menor é obrigatória.";
+      if (!documentos.responsavel_rg_frente) return "A frente do RG/CPF do responsável é obrigatória.";
+      if (!documentos.responsavel_rg_verso) return "O verso do RG/CPF do responsável é obrigatório.";
+      if (!documentos.menor_rg_frente) return "A frente do RG do menor é obrigatória.";
+      if (!documentos.menor_rg_verso) return "O verso do RG do menor é obrigatório.";
+      if (!documentos.certidao_nascimento) return "A certidão de nascimento do menor é obrigatória.";
+      if (!documentos.declaracao_vacina) return "A declaração de vacina é obrigatória.";
+      if (formData.parentesco === 'Autorização Judicial' && !documentos.documento_autorizacao_legal) {
+        return "A Autorização Judicial / Guarda é obrigatória para este parentesco.";
       }
       if (fluxoAtivo === 'renovacao' && !formData.prontuario_menor?.trim()) {
-        return "O prontuÃ¡rio da carteirinha anterior do menor Ã© obrigatÃ³rio na renovaÃ§Ã£o.";
+        return "O prontuário da carteirinha anterior do menor é obrigatório na renovação.";
       }
     }
     return null;
@@ -126,13 +126,13 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
   const handleSubmit = async (e) => {
     e.preventDefault();
     const erro = validarFormulario();
-    if (erro) { toast({ title: "AtenÃ§Ã£o", description: erro, variant: "destructive" }); return; }
+    if (erro) { toast({ title: "Atenção", description: erro, variant: "destructive" }); return; }
 
     setIsSubmitting(true);
     setShowProcessing(true);
     try {
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexÃ£o ou converta PDFs para JPG e tente novamente.')), 90000)
+        setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão ou converta PDFs para JPG e tente novamente.')), 90000)
       );
 
       const uploadPromise = (async () => {
@@ -198,8 +198,8 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
     <form onSubmit={handleSubmit} className="space-y-8">
       <div className="flex items-center justify-between border-b border-slate-100 pb-4">
         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          {fluxoAtivo === 'novo' && <><FileText className="w-5 h-5 text-cyan-500" /> Nova Carteirinha (1Âª Via)</>}
-          {fluxoAtivo === 'renovacao' && <><RefreshCcw className="w-5 h-5 text-cyan-500" /> RenovaÃ§Ã£o da Carteirinha</>}
+          {fluxoAtivo === 'novo' && <><FileText className="w-5 h-5 text-cyan-500" /> Nova Carteirinha (1ª Via)</>}
+          {fluxoAtivo === 'renovacao' && <><RefreshCcw className="w-5 h-5 text-cyan-500" /> Renovação da Carteirinha</>}
           {fluxoAtivo === 'ja_tenho' && <><CheckCircle2 className="w-5 h-5 text-cyan-500" /> Sincronizar Existente</>}
         </h3>
         <Button type="button" variant="ghost" onClick={() => setFluxoAtivo(null)} className="text-slate-500 h-8 px-2 text-xs font-bold uppercase tracking-wider">
@@ -207,20 +207,20 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
         </Button>
       </div>
 
-      {/* DADOS DO RESPONSÃVEL E CONTATO */}
+      {/* DADOS DO RESPONSÁVEL E CONTATO */}
       <div className="space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-        <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider">ResponsÃ¡vel pelo Menor</h3>
+        <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider">Responsável pelo Menor</h3>
         <div className="grid grid-cols-1 gap-6">
           <div className="space-y-2">
-            <Label className="text-slate-600 font-bold text-red-600">VocÃª Ã© o que do Menor? *</Label>
+            <Label className="text-slate-600 font-bold text-red-600">Você é o que do Menor? *</Label>
             <Select value={formData.parentesco} onValueChange={(v) => setFormData({ ...formData, parentesco: v })}>
               <SelectTrigger className="bg-white border-slate-200">
                 <SelectValue placeholder="Selecione o parentesco" />
               </SelectTrigger>
               <SelectContent className="bg-white">
                 <SelectItem value="Pai">Pai</SelectItem>
-                <SelectItem value="MÃ£e">MÃ£e</SelectItem>
-                <SelectItem value="AutorizaÃ§Ã£o Judicial">AutorizaÃ§Ã£o Judicial / Guarda</SelectItem>
+                <SelectItem value="Mãe">Mãe</SelectItem>
+                <SelectItem value="Autorização Judicial">Autorização Judicial / Guarda</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -250,7 +250,7 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
                 <SelectContent className="bg-white h-64">{dias.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={dataNascimento.mes} onValueChange={(v) => setDataNascimento({ ...dataNascimento, mes: v })}>
-                <SelectTrigger className="bg-white"><SelectValue placeholder="MÃªs" /></SelectTrigger>
+                <SelectTrigger className="bg-white"><SelectValue placeholder="Mês" /></SelectTrigger>
                 <SelectContent className="bg-white h-64">{meses.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}</SelectContent>
               </Select>
               <Select value={dataNascimento.ano} onValueChange={(v) => setDataNascimento({ ...dataNascimento, ano: v })}>
@@ -261,7 +261,7 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
           </div>
           <div className="space-y-2">
             <Label className="text-slate-600 font-bold">
-              {tipoIdentificacao === TIPOS_IDENTIFICACAO.CPF ? "CPF do Menor (Opcional)" : "IdentificaÃ§Ã£o do Menor (Opcional)"}
+              {tipoIdentificacao === TIPOS_IDENTIFICACAO.CPF ? "CPF do Menor (Opcional)" : "Identificação do Menor (Opcional)"}
             </Label>
             <Input
               value={formData.cpf_menor}
@@ -275,32 +275,32 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
                   setFormData({ ...formData, cpf_menor: e.target.value.toUpperCase().slice(0, 20) });
                 }
               }}
-              placeholder={tipoIdentificacao === TIPOS_IDENTIFICACAO.CPF ? "000.000.000-00" : "NÂº do Documento do Menor"}
+              placeholder={tipoIdentificacao === TIPOS_IDENTIFICACAO.CPF ? "000.000.000-00" : "Nº do Documento do Menor"}
               className="bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500 font-mono"
             />
           </div>
           {fluxoAtivo === 'renovacao' && (
             <div className="space-y-2">
               <Label className="text-slate-600 font-bold text-red-600 flex items-center gap-2">
-                ProntuÃ¡rio da Carteirinha (Menor) *
+                Prontuário da Carteirinha (Menor) *
                 <BadgeInfo className="w-4 h-4 text-slate-400" />
               </Label>
               <Input
                 value={formData.prontuario_menor}
                 onChange={(e) => setFormData({ ...formData, prontuario_menor: e.target.value.replace(/\D/g, '') })}
-                placeholder="Somente os 6 nÃºmeros"
+                placeholder="Somente os 6 números"
                 maxLength={6}
                 className="bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500 font-mono"
               />
-              <p className="text-xs text-slate-500">Exigido para renovaÃ§Ã£o (presente na carteirinha vencida).</p>
+              <p className="text-xs text-slate-500">Exigido para renovação (presente na carteirinha vencida).</p>
             </div>
           )}
         </div>
       </div>
 
-      {/* VÃNCULO CARCERÃRIO */}
+      {/* VÍNCULO CARCERÁRIO */}
       <div className="space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-        <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider">VÃ­nculo CarcerÃ¡rio</h3>
+        <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider">Vínculo Carcerário</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
           <div className="space-y-2">
             <Label className="text-slate-600 font-bold text-red-600">Nome do Detento *</Label>
@@ -334,13 +334,13 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
           </div>
           <div className="space-y-2">
             <Label className="text-slate-600 font-bold text-red-600 flex items-center gap-2">
-              MatrÃ­cula do Detento (IPEN) *
+              Matrícula do Detento (IPEN) *
               <BadgeInfo className="w-4 h-4 text-slate-400" />
             </Label>
             <Input
               value={formData.matricula_preso}
               onChange={(e) => setFormData({ ...formData, matricula_preso: e.target.value.replace(/\D/g, '') })}
-              placeholder="Somente os 6 nÃºmeros"
+              placeholder="Somente os 6 números"
               maxLength={6}
               className="bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500 font-mono"
             />
@@ -348,7 +348,7 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
         </div>
       </div>
 
-      {/* DOCUMENTAÃ‡ÃƒO */}
+      {/* DOCUMENTAÇÃO */}
       <div className="space-y-6">
         <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider flex items-center gap-2">
           <FileText className="w-4 h-4" /> Envio de Documentos
@@ -359,10 +359,10 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col gap-1">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 text-blue-600" />
-                <h4 className="text-blue-800 font-bold m-0 leading-none">InstruÃ§Ãµes para SincronizaÃ§Ã£o</h4>
+                <h4 className="text-blue-800 font-bold m-0 leading-none">Instruções para Sincronização</h4>
               </div>
               <p className="text-blue-700 text-sm ml-6">
-                Envie uma foto legÃ­vel da carteirinha oficial do menor. Informe a data de emissÃ£o impressa nela para o cÃ¡lculo da validade (2 anos).
+                Envie uma foto legível da carteirinha oficial do menor. Informe a data de emissão impressa nela para o cálculo da validade (2 anos).
               </p>
             </div>
 
@@ -370,21 +370,21 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
               <UploadDocsMenor
                 id="carteirinha_oficial"
                 label="Carteirinha Oficial (Menor) *"
-                descricao="Frente e Verso se possÃ­vel"
+                descricao="Frente e Verso se possível"
                 file={documentos.carteirinha_oficial}
                 handleFileChange={handleFileChange}
                 clearFile={clearFile}
               />
 
               <div className="space-y-4">
-                <Label className="text-slate-600 font-bold text-red-600">Data de EmissÃ£o (Consta na Carteirinha) *</Label>
+                <Label className="text-slate-600 font-bold text-red-600">Data de Emissão (Consta na Carteirinha) *</Label>
                 <div className="grid grid-cols-3 gap-2">
                   <Select value={dataEmissao.dia} onValueChange={(v) => setDataEmissao({ ...dataEmissao, dia: v })}>
                     <SelectTrigger className="bg-white"><SelectValue placeholder="Dia" /></SelectTrigger>
                     <SelectContent className="bg-white h-64">{dias.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
                   </Select>
                   <Select value={dataEmissao.mes} onValueChange={(v) => setDataEmissao({ ...dataEmissao, mes: v })}>
-                    <SelectTrigger className="bg-white"><SelectValue placeholder="MÃªs" /></SelectTrigger>
+                    <SelectTrigger className="bg-white"><SelectValue placeholder="Mês" /></SelectTrigger>
                     <SelectContent className="bg-white h-64">{meses.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}</SelectContent>
                   </Select>
                   <Select value={dataEmissao.ano} onValueChange={(v) => setDataEmissao({ ...dataEmissao, ano: v })}>
@@ -397,17 +397,17 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <UploadDocsMenor id="foto_3x4" label="Foto 3x4 do Menor *" descricao="Fundo branco, rosto nÃ­tido" file={documentos.foto_3x4} handleFileChange={handleFileChange} clearFile={clearFile} />
-            <UploadDocsMenor id="responsavel_rg_frente" label="Seu RG (Frente) *" descricao="Documento do ResponsÃ¡vel" file={documentos.responsavel_rg_frente} handleFileChange={handleFileChange} clearFile={clearFile} />
-            <UploadDocsMenor id="responsavel_rg_verso" label="Seu RG (Verso) *" descricao="Documento do ResponsÃ¡vel" file={documentos.responsavel_rg_verso} handleFileChange={handleFileChange} clearFile={clearFile} />
+            <UploadDocsMenor id="foto_3x4" label="Foto 3x4 do Menor *" descricao="Fundo branco, rosto nítido" file={documentos.foto_3x4} handleFileChange={handleFileChange} clearFile={clearFile} />
+            <UploadDocsMenor id="responsavel_rg_frente" label="Seu RG (Frente) *" descricao="Documento do Responsável" file={documentos.responsavel_rg_frente} handleFileChange={handleFileChange} clearFile={clearFile} />
+            <UploadDocsMenor id="responsavel_rg_verso" label="Seu RG (Verso) *" descricao="Documento do Responsável" file={documentos.responsavel_rg_verso} handleFileChange={handleFileChange} clearFile={clearFile} />
             <UploadDocsMenor id="menor_rg_frente" label="RG do Menor (Frente) *" descricao="Documento do Menor" file={documentos.menor_rg_frente} handleFileChange={handleFileChange} clearFile={clearFile} />
             <UploadDocsMenor id="menor_rg_verso" label="RG do Menor (Verso) *" descricao="Documento do Menor" file={documentos.menor_rg_verso} handleFileChange={handleFileChange} clearFile={clearFile} />
-            <UploadDocsMenor id="certidao_nascimento" label="CertidÃ£o de Nascimento *" descricao="Documento do Menor" file={documentos.certidao_nascimento} handleFileChange={handleFileChange} clearFile={clearFile} />
-            <UploadDocsMenor id="declaracao_vacina" label="DeclaraÃ§Ã£o de Vacina *" descricao="EmissÃ£o recente" file={documentos.declaracao_vacina} handleFileChange={handleFileChange} clearFile={clearFile} />
+            <UploadDocsMenor id="certidao_nascimento" label="Certidão de Nascimento *" descricao="Documento do Menor" file={documentos.certidao_nascimento} handleFileChange={handleFileChange} clearFile={clearFile} />
+            <UploadDocsMenor id="declaracao_vacina" label="Declaração de Vacina *" descricao="Emissão recente" file={documentos.declaracao_vacina} handleFileChange={handleFileChange} clearFile={clearFile} />
 
-            {formData.parentesco === 'AutorizaÃ§Ã£o Judicial' && (
+            {formData.parentesco === 'Autorização Judicial' && (
               <div className="md:col-span-2 border-2 border-cyan-200 rounded-xl p-4 bg-cyan-50/30">
-                <UploadDocsMenor id="documento_autorizacao_legal" label="AutorizaÃ§Ã£o Judicial / Guarda *" descricao="ObrigatÃ³rio para este tipo de parentesco" file={documentos.documento_autorizacao_legal} handleFileChange={handleFileChange} clearFile={clearFile} />
+                <UploadDocsMenor id="documento_autorizacao_legal" label="Autorização Judicial / Guarda *" descricao="Obrigatório para este tipo de parentesco" file={documentos.documento_autorizacao_legal} handleFileChange={handleFileChange} clearFile={clearFile} />
               </div>
             )}
           </div>

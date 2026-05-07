@@ -1,39 +1,77 @@
 
 import { supabase } from '@/lib/supabase';
+
+/**
+ * Normaliza um texto para comparação: remove acentos, converte para maiúsculas e faz trim.
+ * Compatível com a função normalizeCheck do módulo admin/Agendamentos.jsx.
+ */
+export const normalizeCheck = (text) =>
+  String(text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .trim();
+
+/**
+ * Verifica se uma matrícula existe na base IPEN (base_pdf) via RPC segura.
+ * Retorna { encontrado: bool, nome: string|null, nomeNormalizado: string|null }
+ */
+export const verificarMatriculaIPEN = async (matricula) => {
+  if (!matricula || matricula.length !== 6) {
+    return { encontrado: false, nome: null, nomeNormalizado: null };
+  }
+
+  try {
+    const { data, error } = await supabase.rpc('verificar_matricula_ipen', {
+      p_matricula: matricula
+    });
+
+    if (error) {
+      console.error('Erro ao verificar matrícula IPEN:', error);
+      return { encontrado: false, nome: null, nomeNormalizado: null, erro: true };
+    }
+
+    return {
+      encontrado: data?.encontrado ?? false,
+      nome: data?.nome ?? null,
+      nomeNormalizado: data?.nome ? normalizeCheck(data.nome) : null,
+    };
+  } catch (err) {
+    console.error('Exceção ao verificar matrícula IPEN:', err);
+    return { encontrado: false, nome: null, nomeNormalizado: null, erro: true };
+  }
+};
 import { normalizarDocumento, concatenarTelefoneInternacional } from '@/utils/identificacao';
 
 export const checkCPFExists = async (cpf, tipoIdentificacao = 'CPF') => {
   const cpfLimpo = normalizarDocumento(cpf);
 
-  const { data, error } = await supabase
-    .from('perfis')
-    .select('id')
-    .eq('cpf', cpfLimpo)
-    .eq('tipo_identificacao', tipoIdentificacao)
-    .maybeSingle();
+  const { data, error } = await supabase.functions.invoke('verify-user-data', {
+    body: { type: 'cpf', value: cpfLimpo }
+  });
 
-  if (error) {
+  if (error || !data) {
     console.error('Erro ao verificar documento:', error);
     return false;
   }
 
-  return !!data;
+  return data.exists;
 };
 
 // =============================
 // CHECK EMAIL (mantido)
 // =============================
 export const checkEmailExists = async (email) => {
-  const { data, error } = await supabase.rpc('verificar_email_existe', {
-    email_input: email.toLowerCase()
+  const { data, error } = await supabase.functions.invoke('verify-user-data', {
+    body: { type: 'email', value: email.toLowerCase() }
   });
 
-  if (error) {
+  if (error || !data) {
     console.error('Erro ao verificar Email:', error);
     return false;
   }
 
-  return data;
+  return data.exists;
 };
 
 /**
@@ -111,21 +149,9 @@ export const signUpVisitor = async (formData, tipoIdentificacao = 'CPF', tipoTel
       const edgData = response.data;
       const edgeError = response.error;
 
-      // Se ocorreu algum erro técnico OU se o e-mail bateu no nosso filtro de descartáveis, desfaz
+      // Se ocorreu algum erro técnico OU se o e-mail bateu no nosso filtro de descartáveis, o Edge Function já fez o rollback
       if (edgeError || !edgData || edgData.success !== true) {
         console.error('Falha no cadastro (Síncrono):', edgeError || edgData);
-
-        // Rollback para problemas bloqueantes imediatos
-        try {
-          await supabase.functions.invoke("delete-user-internal", {
-            body: {
-              user_id: user.id,
-              secret: import.meta.env.VITE_INTERNAL_SECRET_delete_conta_fail_email
-            }
-          });
-        } catch (rbError) {
-          console.error("Falha no rollback.", rbError);
-        }
 
         const errorMsg = edgData?.error || "Ocorreu um erro ao preparar seu cadastro. Tente novamente.";
         return { success: false, error: errorMsg };

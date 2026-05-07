@@ -11,6 +11,16 @@ import { supabase } from '@/lib/supabase';
 import { Search, CheckCircle, XCircle, Loader2, AlertTriangle, ChevronLeft, ChevronRight, Mail, Phone, ShieldAlert } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
+const fixEncoding = (text) => {
+  if (typeof text !== 'string') return text;
+  try {
+    if (text.includes('Ã') || text.includes('Â') || text.includes('Ã§') || text.includes('Ã£')) {
+      return decodeURIComponent(escape(text));
+    }
+  } catch (e) {}
+  return text;
+};
+
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -251,14 +261,14 @@ const UserManagement = () => {
               users.map((user) => (
                 <TableRow key={user.id} className={`hover:bg-gray-50/50 transition-colors ${!user.aprovado ? 'border-l-4 border-l-yellow-400' : ''}`}>
                   <TableCell className="py-4">
-                    <div className="font-bold text-gray-900">{user.nome}</div>
+                    <div className="font-bold text-gray-900">{fixEncoding(user.nome)}</div>
                     <div className="text-[10px] text-gray-400 uppercase tracking-widest font-mono">Desde: {user.created_at ? new Date(user.created_at).toLocaleDateString() : '---'}</div>
                   </TableCell>
                   <TableCell className="py-4 text-xs space-y-1">
                     <div className="flex items-center gap-1 text-gray-600"><Mail className="w-3 h-3 text-gray-400" /> {user.email}</div>
                     <div className="flex items-center gap-1 text-gray-600"><Phone className="w-3 h-3 text-gray-400" /> {user.telefone || 'N/A'}</div>
                   </TableCell>
-                  <TableCell className="py-4 font-medium text-gray-700">{user.cpf?.replace(/\D/g, '')}</TableCell>
+                  <TableCell className="py-4 font-medium text-gray-700 select-all">{user.cpf?.replace(/\D/g, '')}</TableCell>
                   <TableCell className="py-4 font-medium text-gray-700">
                     {user.data_nascimento ? user.data_nascimento.split('-').reverse().join('/') : '---'}
                   </TableCell>

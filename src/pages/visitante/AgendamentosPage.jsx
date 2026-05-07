@@ -90,9 +90,18 @@ const AgendamentosPage = () => {
     return () => { isMounted = false; };
   }, [user, fetchData]);
 
+  const formatMonth = (date) => {
+    const m = date.toLocaleDateString('pt-BR', { month: 'long' });
+    return m.charAt(0).toUpperCase() + m.slice(1);
+  };
+
   const categorias = useMemo(() => {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
+
+    const mesAtualStr = hoje.toISOString().slice(0, 7); // "YYYY-MM"
+    const dataProximoMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+    const proximoMesStr = dataProximoMes.toISOString().slice(0, 7); // "YYYY-MM"
 
     // Ordenação base para garantir que os mais recentes apareçam primeiro
     const sorted = [...agendamentos].sort((a, b) => new Date(b.data_visita) - new Date(a.data_visita));
@@ -122,6 +131,9 @@ const AgendamentosPage = () => {
       return isStatusFinalizado || isAprovadoAntigo;
     });
 
+    const pendentesMesAtual = sorted.filter(a => a.status === 'pendente' && a.data_visita?.startsWith(mesAtualStr)).length;
+    const pendentesProximoMes = sorted.filter(a => a.status === 'pendente' && a.data_visita?.startsWith(proximoMesStr)).length;
+
     // Aplicando paginação apenas no histórico
     const totalPages = Math.ceil(historicoCompleto.length / pageSize);
     const historicoPaginado = historicoCompleto.slice(page * pageSize, (page + 1) * pageSize);
@@ -131,8 +143,10 @@ const AgendamentosPage = () => {
       historico: historicoPaginado,
       totalHistorico: historicoCompleto.length,
       totalPages,
-      // Mantemos a contagem de pendentes para a regra de limite de 5 agendamentos
-      totalPendentes: sorted.filter(a => a.status === 'pendente').length
+      pendentesMesAtual,
+      pendentesProximoMes,
+      nomeMesAtual: formatMonth(hoje),
+      nomeProximoMes: formatMonth(dataProximoMes),
     };
   }, [agendamentos, page]);
 
@@ -341,9 +355,9 @@ const AgendamentosPage = () => {
                 <div className="space-y-1">
                   <p className="text-sm font-bold text-amber-900 leading-tight uppercase">Regras e Critérios</p>
                   <p className="text-xs text-amber-800 leading-relaxed">
-                    Visitante, você pode solicitar até <strong>5 agendamentos por vez</strong>.
+                    Visitante, você pode solicitar até <strong>5 agendamentos por mês</strong>.
                     Uma vez que um agendamento for <strong>Aprovado, Cancelado ou Recusado</strong>,
-                    você poderá realizar uma nova solicitação.
+                    você poderá realizar uma nova solicitação para o mesmo mês se não tiver atingido o limite.
                   </p>
                 </div>
 
@@ -356,16 +370,26 @@ const AgendamentosPage = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              {categorias.totalPendentes >= 5 ? (
-                <Badge className="bg-red-100 text-red-700 border-red-200 px-3 py-1.5 text-xs font-black uppercase flex items-center gap-2 shadow-sm">
-                  <XCircle className="w-3.5 h-3.5" /> Limite Atingido
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className={`flex items-center justify-between sm:justify-start gap-3 px-4 py-2.5 rounded-xl border ${categorias.pendentesMesAtual >= 5 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-green-200 text-green-700 shadow-sm'}`}>
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  <span className="text-xs font-black uppercase tracking-widest">{categorias.nomeMesAtual}</span>
+                </div>
+                <Badge className={`${categorias.pendentesMesAtual >= 5 ? 'bg-red-500 hover:bg-red-600' : 'bg-green-600 hover:bg-green-700'} text-white border-none px-2 py-0.5 shadow-sm`}>
+                  {Math.max(0, 5 - categorias.pendentesMesAtual)} restantes
                 </Badge>
-              ) : (
-                <Badge className="bg-green-100 text-green-700 border-green-200 px-3 py-1.5 text-xs font-black uppercase shadow-sm">
-                  Atenção: Você ainda pode agendar mais {5 - categorias.totalPendentes}x
+              </div>
+
+              <div className={`flex items-center justify-between sm:justify-start gap-3 px-4 py-2.5 rounded-xl border ${categorias.pendentesProximoMes >= 5 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-blue-200 text-blue-700 shadow-sm'}`}>
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4" />
+                  <span className="text-xs font-black uppercase tracking-widest">{categorias.nomeProximoMes}</span>
+                </div>
+                <Badge className={`${categorias.pendentesProximoMes >= 5 ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-600 hover:bg-blue-700'} text-white border-none px-2 py-0.5 shadow-sm`}>
+                  {Math.max(0, 5 - categorias.pendentesProximoMes)} restantes
                 </Badge>
-              )}
+              </div>
             </div>
           </div>
 
@@ -385,8 +409,7 @@ const AgendamentosPage = () => {
               </TabsTrigger>
               <TabsTrigger
                 value="nova-solicitacao"
-                disabled={categorias.totalPendentes >= 5}
-                className="rounded-lg font-bold data-[state=active]:bg-[#2D5016] data-[state=active]:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-lg font-bold data-[state=active]:bg-[#2D5016] data-[state=active]:text-white"
               >
                 <PlusCircle className="w-4 h-4 mr-2 hidden sm:block" /> Nova Solicitação
               </TabsTrigger>
@@ -399,7 +422,7 @@ const AgendamentosPage = () => {
                 <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
                   <Calendar className="w-16 h-16 mx-auto text-gray-200 mb-4" />
                   <p className="text-gray-500 font-bold uppercase text-xs">Nenhuma visita encontrada</p>
-                  <Button onClick={() => setActiveTab('nova-solicitacao')} disabled={categorias.totalPendentes >= 5} className="mt-4 bg-[#2D5016]">Agendar Primeira Visita</Button>
+                  <Button onClick={() => setActiveTab('nova-solicitacao')} className="mt-4 bg-[#2D5016]">Agendar Primeira Visita</Button>
                 </div>
               ) : (
                 <div className="space-y-10">
@@ -582,7 +605,7 @@ const AgendamentosPage = () => {
               <div className="bg-amber-50 text-amber-900 py-4 px-6 shadow-sm rounded-xl border border-amber-200 animate-in fade-in slide-in-from-top-2 duration-500">
                 <p className="text-sm font-bold flex flex-col sm:flex-row items-center gap-2 text-center sm:text-left">
                   <span className="bg-amber-500 text-white rounded-full px-2 py-0.5 text-xs font-black uppercase shrink-0 shadow-sm">Aviso</span>
-                  ⚠️ Limite de 3 visitas sociais por mês e 2 visitas íntimas por mês por DETENTO.
+                  ⚠️ Limite de 3 visitas sociais por mês e 2 visitas íntimas por mês por DETENTO, e no máximo 5 solicitações por mês por VISITANTE.
                 </p>
               </div>
               <AgendamentoModal onSuccess={() => { setActiveTab("meus-agendamentos"); setPage(0); fetchData(); }} />

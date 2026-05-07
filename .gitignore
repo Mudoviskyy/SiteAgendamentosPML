@@ -50,3 +50,11 @@ build/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Data and sensitive files
+*.pdf
+*.csv
+*.xlsx
+*.xls
+src/components/admin/relacao preso/
+supabase/.temp/

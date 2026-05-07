@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  Users, FileText, CheckCircle, Clock, CalendarDays, Loader2, 
-  AlertCircle, TrendingUp, Calendar, HardDrive, Database, Activity, 
-  Globe 
+import {
+  Users, FileText, CheckCircle, Clock, CalendarDays, Loader2,
+  AlertCircle, TrendingUp, Calendar, HardDrive, Database, Activity,
+  Globe, Zap, Cpu, Table2, UserCheck
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,7 +14,7 @@ import CalendarioAdmin from '../CalendarioAdmin';
 
 const Dashboard = ({ onNavigateTab }) => {
   const { onlineUsers } = useAuth();
-  
+
   const [stats, setStats] = useState({
     usuariosAprovados: 0,
     usuariosPendentes: 0,
@@ -28,6 +28,16 @@ const Dashboard = ({ onNavigateTab }) => {
     dbSize: 0,
     storageSize: 0,
     bandwidth: 0
+  });
+
+  const [systemMetrics, setSystemMetrics] = useState({
+    connections: 0,
+    max_connections: 60,
+    cache_hit_ratio: 0,
+    mau: 0,
+    mau_limit: 50000,
+    shared_buffers_mb: 0,
+    table_sizes: []
   });
 
   const [loading, setLoading] = useState(true);
@@ -58,8 +68,12 @@ const Dashboard = ({ onNavigateTab }) => {
 
         const fetchSystemHealth = async () => {
           try {
-            const { data: dbMB } = await supabase.rpc('get_database_size_mb');
-            const { data: storageBytes } = await supabase.rpc('get_storage_size_bytes');
+            const [{ data: dbMB }, { data: storageBytes }, { data: metrics }] = await Promise.all([
+              supabase.rpc('get_database_size_mb'),
+              supabase.rpc('get_storage_size_bytes'),
+              supabase.rpc('get_system_metrics')
+            ]);
+            if (metrics) setSystemMetrics(metrics);
             return {
               dbSize: dbMB || 0,
               storageSize: (storageBytes || 0) / (1024 * 1024)
@@ -130,7 +144,7 @@ const Dashboard = ({ onNavigateTab }) => {
           taxaOcupacao: tOcupacao,
           agendamentosMes: totalAgendamentosMes
         });
-        
+
         addLog('DASHBOARD_LOAD_SUCCESS', { statsFound: true }, 'SUCCESS');
 
       } catch (error) {
@@ -250,9 +264,97 @@ const Dashboard = ({ onNavigateTab }) => {
         <CardContent className="grid gap-6 md:grid-cols-3">
           <UsageBar label="Banco de Dados" current={limits.dbSize} max={500} unit="MB" icon={Database} />
           <UsageBar label="Storage" current={limits.storageSize} max={1024} unit="MB" icon={HardDrive} />
-          <UsageBar label="Transferência" current={0} max={2048} unit="MB" icon={TrendingUp} />
+          <div className="space-y-2">
+            <UsageBar label="Transferência Mensal" current={0} max={5120} unit="MB" icon={TrendingUp} />
+            <p className="text-[9px] text-gray-400 italic">⚠ Verificar manualmente no <a href="https://supabase.com/dashboard/project/toojlckoryivrisccfiq/settings/infrastructure" target="_blank" rel="noopener noreferrer" className="underline text-blue-400 hover:text-blue-600">Painel do Supabase</a></p>
+          </div>
         </CardContent>
       </Card>
+
+      {/* MÉTRICAS AVANÇADAS DO SISTEMA */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Conexões e MAU */}
+        <Card className="bg-white shadow-sm border border-gray-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-bold flex items-center gap-2 text-gray-600">
+              <Zap className="w-4 h-4 text-yellow-500" /> CAPACIDADE DO SISTEMA
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <UsageBar
+              label="Conexões Ativas - Se chegar em 60, A solução é aguardar."
+              current={systemMetrics.connections}
+              max={systemMetrics.max_connections || 60}
+              unit=""
+              icon={Cpu}
+            />
+            <UsageBar
+              label="Usuários Ativos no Mês (MAU)"
+              current={systemMetrics.mau}
+              max={systemMetrics.mau_limit || 50000}
+              unit=""
+              icon={UserCheck}
+            />
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs">
+                <div className="flex items-center gap-1 text-gray-500 font-medium uppercase">
+                  <Activity className="w-3 h-3" /> Cache Hit Ratio
+                </div>
+                <span className={`font-bold ${systemMetrics.cache_hit_ratio < 80 ? 'text-red-600' :
+                  systemMetrics.cache_hit_ratio < 95 ? 'text-yellow-600' : 'text-green-600'
+                  }`}>{systemMetrics.cache_hit_ratio}%</span>
+              </div>
+              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden border border-gray-200">
+                <div
+                  className={`h-full transition-all duration-1000 ${systemMetrics.cache_hit_ratio < 80 ? 'bg-red-500' :
+                    systemMetrics.cache_hit_ratio < 95 ? 'bg-yellow-500' : 'bg-[#2D5016]'
+                    }`}
+                  style={{ width: `${Math.min(systemMetrics.cache_hit_ratio, 100)}%` }}
+                />
+              </div>
+              <p className="text-[9px] text-gray-400">Eficiência da memória cache. Abaixo de 95% pode indicar sobrecarga.</p>
+            </div>
+            <div className="flex justify-between items-center text-xs border-t pt-2">
+              <span className="flex items-center gap-1 text-gray-500 uppercase font-medium">
+                <HardDrive className="w-3 h-3" /> Memória Cache (shared_buffers)
+              </span>
+              <span className="font-bold text-gray-700">{systemMetrics.shared_buffers_mb} MB</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Tamanho por Tabela */}
+        <Card className="bg-white shadow-sm border border-gray-200">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-bold flex items-center gap-2 text-gray-600">
+              <Table2 className="w-4 h-4 text-blue-500" /> TAMANHO POR TABELA (TOP 8)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {systemMetrics.table_sizes && systemMetrics.table_sizes.length > 0 ? (
+              <div className="space-y-2">
+                {systemMetrics.table_sizes.map((t, i) => {
+                  const totalDb = limits.dbSize * 1024 * 1024;
+                  const pct = totalDb > 0 ? Math.min(Math.round((t.tamanho / totalDb) * 100), 100) : 0;
+                  return (
+                    <div key={i} className="space-y-0.5">
+                      <div className="flex justify-between text-[10px]">
+                        <span className="text-gray-600 font-medium truncate max-w-[60%]">{t.tabela}</span>
+                        <span className="text-gray-500 font-bold">{t.tamanho_legivel} ({pct}%)</span>
+                      </div>
+                      <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+                        <div className="h-full bg-blue-400 transition-all duration-700" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 text-center py-4">Sem dados de tabelas</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* NOVO POSICIONAMENTO: CALENDÁRIO FULL WIDTH */}
       <div className="w-full">
@@ -297,8 +399,8 @@ const Dashboard = ({ onNavigateTab }) => {
           <CardContent className="flex flex-col items-center justify-center pt-6">
             <div className="text-6xl font-black text-[#2D5016] mb-4">{stats.taxaOcupacao}%</div>
             <div className="w-full max-w-sm bg-gray-100 rounded-full h-4 mb-4 border border-gray-200 overflow-hidden">
-              <div 
-                className="bg-[#2D5016] h-4 rounded-full transition-all duration-1000" 
+              <div
+                className="bg-[#2D5016] h-4 rounded-full transition-all duration-1000"
                 style={{ width: `${Math.min(stats.taxaOcupacao, 100)}%` }}
               ></div>
             </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, AlertCircle, Lock, Clock } from 'lucide-react';
+import { Loader2, AlertCircle, Lock, Clock, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Select as SelectUI, SelectContent, SelectItem, SelectTrigger, SelectVal
 import { carteirinhasService } from '@/services/carteirinhasService';
 import ProcessingModal from '@/components/shared/ProcessingModal';
 import UploadErrorModal from '@/components/shared/UploadErrorModal';
+import { verificarMatriculaIPEN, normalizeCheck } from '@/services/visitanteService';
 
 import {
   TIPOS_IDENTIFICACAO, TIPOS_TELEFONE, DDIS, getIdentificacaoLabel, normalizarDocumento, concatenarTelefoneInternacional
@@ -33,6 +34,8 @@ const FormularioSolicitacao = ({ user, profile, onSuccess, setOpenExampleVacina 
   const [possuiCarteirinha, setPossuiCarteirinha] = useState(null);
   const [parentescoSelecionado, setParentescoSelecionado] = useState("");
   const [nomeApenado, setNomeApenado] = useState("");
+  // Alerta IPEN: null = sem alerta | { nomeIPEN, matricula, dadosParaSubmit }
+  const [ipenAlerta, setIpenAlerta] = useState(null);
 
   const [tipoIdentificacao, setTipoIdentificacao] = useState(TIPOS_IDENTIFICACAO.CPF);
   const [tipoTelefone, setTipoTelefone] = useState(TIPOS_TELEFONE.BR);
@@ -249,10 +252,69 @@ const FormularioSolicitacao = ({ user, profile, onSuccess, setOpenExampleVacina 
       }
     }
 
+    // === VERIFICAÇÃO IPEN (somente quando matrícula é obrigatória) ===
+    const matriculaObrigatoria = possuiCarteirinha === true || possuiCarteirinha === 'renovacao';
+    if (matriculaObrigatoria && matriculaInput && matriculaInput.length === 6) {
+      const resultado = await verificarMatriculaIPEN(matriculaInput);
+
+      if (resultado.erro) {
+        // Falha de conexão – avisa mas não bloqueia
+        toast({
+          title: "Aviso: verificação indisponível",
+          description: "Não foi possível verificar a matrícula agora. Revise os dados e tente novamente.",
+          className: "bg-amber-500 text-white border-none",
+          duration: 5000,
+        });
+      } else if (!resultado.encontrado) {
+        toast({
+          title: "Matrícula não encontrada",
+          description: "Este número não consta na base IPEN. Verifique se a matrícula está correta na Carteirinha Oficial ou contate o Setor Social.",
+          className: "bg-red-500 text-white border-none",
+          duration: 8000,
+        });
+        return;
+      } else {
+        // Matrícula encontrada – verifica se o nome bate
+        const nomeDigitadoNorm = normalizeCheck(nomeApenado);
+        if (nomeDigitadoNorm !== resultado.nomeNormalizado) {
+          // Nome diverge: exibe alerta com dados para eventual re-submissão
+          setIpenAlerta({
+            nomeIPEN: resultado.nome,
+            nomeDigitado: nomeApenado,
+            dadosForm: {
+              matriculaInput,
+              telefoneFinal,
+              dataEmissaoFinal,
+              documentosRaw,
+            },
+          });
+          return;
+        }
+        // Nome OK – usa o nome padronizado do IPEN
+        setNomeApenado(resultado.nome);
+      }
+    }
+
+    // Prossegue com o upload
+    const dados = {
+      nome: profile.nome_completo,
+      cpf: normalizarDocumento(documentoValor),
+      tipo_identificacao: tipoIdentificacao,
+      tipo_telefone: tipoTelefone,
+      parentesco: LABEL_PARENTESCO[parentescoSelecionado] || parentescoSelecionado,
+      nome_apenado: nomeApenado,
+      matricula_preso: matriculaInput,
+      telefone: telefoneFinal,
+      possui_carteirinha: possuiCarteirinha,
+    };
+    await executarUpload(nomeApenado, dados, documentosRaw, dataEmissaoFinal);
+  };
+
+  // Executa o upload efetivo (chamado também a partir do alerta IPEN)
+  const executarUpload = async (nomeApenadoFinal, dados, documentosRaw, dataEmissaoFinal) => {
     setLoading(true);
     setShowProcessing(true);
     try {
-      // Timeout de 90 segundos
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão ou converta os PDFs para JPG e tente novamente.')), 90000)
       );
@@ -269,14 +331,8 @@ const FormularioSolicitacao = ({ user, profile, onSuccess, setOpenExampleVacina 
           }
         }
 
-        const dados = {
-          nome: profile.nome_completo, cpf: normalizarDocumento(documentoValor), tipo_identificacao: tipoIdentificacao,
-          tipo_telefone: tipoTelefone, parentesco: LABEL_PARENTESCO[parentescoSelecionado] || parentescoSelecionado,
-          nome_apenado: formDataObj.get("nome_apenado"), matricula_preso: formDataObj.get("matricula_preso"),
-          telefone: telefoneFinal, possui_carteirinha: possuiCarteirinha
-        };
-
-        return await carteirinhasService.createCarteirinha(dados, documentos, user.id, dataEmissaoFinal);
+        const dadosFinal = { ...dados, nome_apenado: nomeApenadoFinal };
+        return await carteirinhasService.createCarteirinha(dadosFinal, documentos, user.id, dataEmissaoFinal);
       })();
 
       const result = await Promise.race([uploadPromise, timeoutPromise]);
@@ -297,6 +353,70 @@ const FormularioSolicitacao = ({ user, profile, onSuccess, setOpenExampleVacina 
       onClose={() => setUploadError(null)}
       errorMessage={uploadError}
     />
+
+    {/* ===== MODAL DE ALERTA IPEN – Nome divergente ===== */}
+    {ipenAlerta && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+          <div className="p-5 border-b border-amber-100 bg-amber-50 rounded-t-2xl flex items-center gap-2">
+            <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" />
+            <h3 className="font-black text-amber-800 uppercase tracking-wider text-sm">Atenção: Nome Divergente</h3>
+          </div>
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-slate-700 leading-relaxed">
+              A matrícula foi localizada no IPEN, porém o <strong>nome do interno</strong> não corresponde ao cadastro oficial.
+            </p>
+            <div className="grid grid-cols-1 gap-3">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-red-700 uppercase tracking-wider mb-1">Nome digitado por você</p>
+                <p className="font-mono font-bold text-red-900 text-sm">{ipenAlerta.nomeDigitado?.toUpperCase()}</p>
+              </div>
+              <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-green-700 uppercase tracking-wider mb-1">Nome oficial no IPEN</p>
+                <p className="font-mono font-bold text-green-900 text-sm">{ipenAlerta.nomeIPEN}</p>
+              </div>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-[11px] text-amber-800 leading-relaxed font-medium">
+                Se o <strong>Nome Oficial do IPEN</strong> estiver correto, clique em <strong>"Usar nome do IPEN"</strong> para corrigir e enviar automaticamente. Caso contrário, volte e corrija os dados.
+              </p>
+            </div>
+          </div>
+          <div className="p-5 pt-0 flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setIpenAlerta(null)} className="text-xs font-bold uppercase">
+              Voltar e Corrigir
+            </Button>
+            <Button
+              disabled={loading}
+              onClick={async () => {
+                const { dadosForm } = ipenAlerta;
+                const nomeCorrigido = ipenAlerta.nomeIPEN;
+                const dados = {
+                  nome: profile.nome_completo,
+                  cpf: normalizarDocumento(documentoValor),
+                  tipo_identificacao: tipoIdentificacao,
+                  tipo_telefone: tipoTelefone,
+                  parentesco: LABEL_PARENTESCO[parentescoSelecionado] || parentescoSelecionado,
+                  nome_apenado: nomeCorrigido,
+                  matricula_preso: dadosForm.matriculaInput,
+                  telefone: dadosForm.telefoneFinal,
+                  possui_carteirinha: possuiCarteirinha,
+                };
+                setNomeApenado(nomeCorrigido);
+                setIpenAlerta(null);
+                await executarUpload(nomeCorrigido, dados, dadosForm.documentosRaw, dadosForm.dataEmissaoFinal);
+              }}
+              className="bg-[#2D5016] hover:bg-[#1f3810] text-white text-xs font-bold uppercase tracking-wider"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              Usar Nome do IPEN e Enviar
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg mb-4 text-sm text-amber-900 flex items-start gap-3">
         <Lock className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" />

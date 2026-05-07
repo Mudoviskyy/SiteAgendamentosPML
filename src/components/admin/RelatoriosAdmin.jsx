@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, Loader2, CalendarDays, RefreshCw, Calendar as CalendarIcon } from 'lucide-react';
+import { Download, Loader2, CalendarDays, RefreshCw, Calendar as CalendarIcon, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area
@@ -546,28 +546,39 @@ const RelatoriosAdmin = () => {
             </div>
 
             
-            {/* Top 6 Rank */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            {/* Listas Acionáveis */}
+            <div className="mt-6 mb-2">
+              <span className="text-[11px] text-slate-500 font-medium">* Nota: Para manter a precisão destas listas de alerta, certifique-se de sincronizar o Relatório 8.6 do IPEN mensalmente.</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <h4 className="text-sm font-bold text-slate-700 uppercase border-b pb-2 mb-3">Top 6: Detentos Mais Visitados</h4>
+                <h4 className="text-sm font-bold text-red-700 uppercase border-b pb-2 mb-3 flex items-center gap-2">
+                  <AlertTriangle size={16} /> Top 6: Visitantes Inadimplentes
+                </h4>
                 <div className="space-y-2">
-                  {advMetrics.top_presos?.map((p, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm bg-slate-50 p-2 rounded-lg">
-                      <span className="font-medium text-slate-800">{i+1}. {p.name}</span>
-                      <span className="font-bold text-[#2D5016] bg-green-100 px-2 py-1 rounded-md">{p.value} vis.</span>
+                  {advMetrics.visitantes_inadimplentes?.length > 0 ? advMetrics.visitantes_inadimplentes.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm bg-red-50 p-2 rounded-lg border border-red-100">
+                      <span className="font-medium text-red-900">{i+1}. {p.name}</span>
+                      <span className="font-bold text-red-700 bg-red-200 px-2 py-1 rounded-md">{p.value} faltas</span>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="text-sm text-gray-400 p-4 text-center">Nenhum visitante com múltiplas faltas no mês.</div>
+                  )}
                 </div>
               </div>
               <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
-                <h4 className="text-sm font-bold text-slate-700 uppercase border-b pb-2 mb-3">Top 6: Visitantes + Assíduos</h4>
+                <h4 className="text-sm font-bold text-amber-700 uppercase border-b pb-2 mb-3 flex items-center gap-2">
+                  <ShieldCheck size={16} /> Alerta: Visitantes Cruzados
+                </h4>
                 <div className="space-y-2">
-                  {advMetrics.top_visitantes?.map((v, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm bg-indigo-50 p-2 rounded-lg">
-                      <span className="font-medium text-slate-800">{i+1}. {v.name}</span>
-                      <span className="font-bold text-indigo-700 bg-indigo-200 px-2 py-1 rounded-md">{v.value} vis.</span>
+                  {advMetrics.visitantes_cruzados?.length > 0 ? advMetrics.visitantes_cruzados.map((v, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm bg-amber-50 p-2 rounded-lg border border-amber-100">
+                      <span className="font-medium text-amber-900">{i+1}. {v.name}</span>
+                      <span className="font-bold text-amber-700 bg-amber-200 px-2 py-1 rounded-md">{v.value} internos</span>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="text-sm text-gray-400 p-4 text-center">Nenhum visitante visitou múltiplos internos no mês.</div>
+                  )}
                 </div>
               </div>
             </div>

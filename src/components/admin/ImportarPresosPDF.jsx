@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/dialog';
 import { Loader2, FileUp, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-
+// Este arquivo importa presos para que a aba agendamentos e carteriinhas possam levar ao admin a certeza que as matriculas
+// digitadas pelos visitantes realmente são validas
 // Configuração do Worker do PDF.js (CDN para evitar problemas de build locais)
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
 
@@ -32,7 +33,7 @@ const ImportarPresosPDF = ({ onComplete }) => {
     try {
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjs.getDocument(arrayBuffer).promise;
-      
+
       let fullText = "";
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
@@ -67,7 +68,7 @@ const ImportarPresosPDF = ({ onComplete }) => {
         title: "Sucesso!",
         description: `${presos.length} detentos sincronizados com a base.`,
       });
-      
+
       if (onComplete) onComplete();
     } catch (error) {
       console.error("Erro no processamento:", error);
@@ -84,11 +85,11 @@ const ImportarPresosPDF = ({ onComplete }) => {
   const parsearTexto = (texto) => {
     // Portabilidade da lógica do Apps Script
     let bruto = String(texto || '');
-    
+
     // Normalização básica de quebras de linha
     bruto = bruto.replace(/(GAL:\s*[A-Z])/g, '\n$1');
     bruto = bruto.replace(/(^|[^\d])(\d{6}\s+)/g, (match, p1, p2) => p1 + '\n' + p2);
-    
+
     const linhas = bruto.split('\n')
       .map(l => l.trim())
       .filter(Boolean);
@@ -126,9 +127,9 @@ const ImportarPresosPDF = ({ onComplete }) => {
         // Tenta capturar continuação do nome em linhas seguintes
         while (i + 1 < linhas.length) {
           const prox = linhas[i + 1];
-          if (/^GAL:\s*[A-Z]/i.test(prox) || /^\d{6}\s+/.test(prox) || 
-              ehLinhaAdministrativa(prox) || temCaraDeOcorrencia(prox)) break;
-          
+          if (/^GAL:\s*[A-Z]/i.test(prox) || /^\d{6}\s+/.test(prox) ||
+            ehLinhaAdministrativa(prox) || temCaraDeOcorrencia(prox)) break;
+
           nome += ' ' + prox;
           i++;
         }
