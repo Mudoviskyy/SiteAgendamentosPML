@@ -13,16 +13,41 @@ export const comprimirArquivo = async (file) => {
     return file;
   }
 
+  if (file.size < 250 * 1024) {
+    return file;
+  }
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
   const options = {
     maxSizeMB: 0.8,
-    maxWidthOrHeight: 1920,
-    useWebWorker: true,
+    maxWidthOrHeight: isIOS ? 1600 : 1920, // Resolução um pouco menor no iOS para evitar crash de memória
+    useWebWorker: !isIOS, // No iOS, workers em canvas costumam dar erro de memória, melhor rodar na main thread
     initialQuality: 0.8,
   };
 
   try {
     const compressedBlob = await imageCompression(file, options);
-    return new File([compressedBlob], file.name, { type: file.type });
+    
+    if (!compressedBlob || compressedBlob.size === 0) {
+      console.warn("Compressão vazia. Usando original.");
+      return file;
+    }
+
+    let finalFile;
+    if (compressedBlob instanceof File) {
+      finalFile = compressedBlob;
+    } else {
+      finalFile = new File([compressedBlob], file.name, { 
+        type: file.type || compressedBlob.type || 'image/jpeg' 
+      });
+    }
+
+    if (!finalFile || !finalFile.size || finalFile.size === 0) {
+      return file;
+    }
+
+    return finalFile;
   } catch (error) {
     console.error("Erro na compressão:", error);
     return file;
@@ -36,6 +61,26 @@ const UploadDocumentos = ({ doc, isRequired, documentosState, handleFileSelect, 
 
   const onFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
+
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+
+    const invalidFormatFiles = selectedFiles.filter(f => {
+      const type = f.type.toLowerCase();
+      const extension = f.name.split('.').pop().toLowerCase();
+      return !allowedTypes.includes(type) && !allowedExtensions.includes(extension);
+    });
+
+    if (invalidFormatFiles.length > 0) {
+      toast({
+        title: "Formato inválido",
+        description: `Somente arquivos JPG, JPEG, PNG e PDF são aceitos. Arquivo recusado: "${invalidFormatFiles[0].name}".`,
+        className: "bg-red-500 text-white border-none"
+      });
+      e.target.value = "";
+      handleFileSelect({ target: { files: [] } }, doc.name);
+      return;
+    }
 
     const oversizedFiles = selectedFiles.filter(f => f.size > 5 * 1024 * 1024);
     if (oversizedFiles.length > 0) {

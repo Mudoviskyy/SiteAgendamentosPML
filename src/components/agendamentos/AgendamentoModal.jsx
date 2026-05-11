@@ -427,6 +427,16 @@ const AgendamentoModal = ({ onSuccess }) => {
 
       {/* Content */}
       <div className="p-6 min-h-[400px]">
+        <div className="mb-6 bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3 shadow-sm">
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="text-amber-800 font-bold uppercase text-sm">Atenção às Faltas</h4>
+            <p className="text-amber-700 text-sm mt-1">
+              O não comparecimento às visitas agendadas tira a vaga de outro familiar. Evite de não ir no dia da visita.
+            </p>
+          </div>
+        </div>
+
         {verificandoCarteirinha && (
           <div className="flex justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-[#2D5016]" />

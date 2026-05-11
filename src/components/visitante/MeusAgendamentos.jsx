@@ -10,7 +10,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { cancelarAgendamentoVisitante } from '@/services/agendamentosService';
 
 const MeusAgendamentos = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { agendamentos, fetchUserAgendamentos } = useAgendamentos();
 
   const [pageHistorico, setPageHistorico] = useState(0);
@@ -230,6 +230,16 @@ const MeusAgendamentos = () => {
 
   return (
     <>
+      <div className="mb-6 bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3 shadow-sm">
+        <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+        <div>
+          <h4 className="text-amber-800 font-bold uppercase text-sm">Atenção às Faltas</h4>
+          <p className="text-amber-700 text-sm mt-1">
+            O não comparecimento às visitas agendadas tira a vaga de outro familiar. Evite de não ir no dia da visita.
+          </p>
+        </div>
+      </div>
+
       <Tabs defaultValue="ativos" className="w-full">
         <div className="flex items-center justify-between border-b pb-2">
           <TabsList className="bg-gray-100/50">

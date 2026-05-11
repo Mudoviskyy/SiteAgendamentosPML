@@ -19,12 +19,14 @@ import {
   Terminal
 } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import TicketChat from '@/components/visitante/TicketChat';
 
 const UserApproval = () => {
-  const [reports, setReports] = useState([]);
+  const { user } = useAuth();
+  const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedReport, setSelectedReport] = useState(null);
-  const [resposta, setResposta] = useState('');
+  const [selectedTicket, setSelectedTicket] = useState(null);
   const [fraudAlert, setFraudAlert] = useState(null);
   const [suspects, setSuspects] = useState([]);
   const [activeTab, setActiveTab] = useState('bugs'); // 'bugs' ou 'fraude'
@@ -36,14 +38,14 @@ const UserApproval = () => {
 
   const { toast } = useToast();
 
-  const fetchReports = async () => {
+  const fetchTickets = async () => {
     setLoading(true);
     try {
       const from = (currentPage - 1) * ITEMS_PER_PAGE;
       const to = from + ITEMS_PER_PAGE - 1;
 
       const { data, error, count } = await supabase
-        .from('reports_bugs')
+        .from('tickets')
         .select('*', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, to);
@@ -54,10 +56,10 @@ const UserApproval = () => {
         throw error;
       }
 
-      setReports(data || []);
+      setTickets(data || []);
       setTotalCount(count || 0);
     } catch (error) {
-      console.error('Erro geral ao buscar reports:', error);
+      console.error('Erro geral ao buscar tickets:', error);
     } finally {
       setLoading(false);
     }
@@ -89,7 +91,7 @@ const UserApproval = () => {
   };
 
   useEffect(() => {
-    fetchReports();
+    fetchTickets();
     fetchSuspects();
 
     // 🔴 Monitoramento Anti-Fraude em Tempo Real
@@ -118,49 +120,29 @@ const UserApproval = () => {
     }
   };
 
-  const handleDeleteReport = async (id) => {
+  const handleDeleteTicket = async (id) => {
     try {
-      const { error } = await supabase.from('reports_bugs').delete().eq('id', id);
+      const { error } = await supabase.from('tickets').delete().eq('id', id);
       if (error) throw error;
-      toast({ title: "Removido", description: "O relato foi excluído com sucesso." });
-      fetchReports();
+      toast({ title: "Removido", description: "O ticket foi excluído com sucesso." });
+      
+      if (selectedTicket?.id === id) setSelectedTicket(null);
+      fetchTickets();
     } catch (error) {
       toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
     }
   };
 
   const handleDeleteAll = async () => {
-    if (!window.confirm("Tem certeza que deseja excluir TODOS os relatos?")) return;
+    if (!window.confirm("Tem certeza que deseja excluir TODOS os tickets?")) return;
     try {
-      const { error } = await supabase.from('reports_bugs').delete().neq('id', 0);
+      const { error } = await supabase.from('tickets').delete().neq('id', 0);
       if (error) throw error;
-      toast({ title: "Limpeza concluída", description: "Todos os relatos foram removidos." });
-      fetchReports();
+      toast({ title: "Limpeza concluída", description: "Todos os tickets foram removidos." });
+      setSelectedTicket(null);
+      fetchTickets();
     } catch (error) {
       toast({ title: "Erro ao excluir todos", description: error.message, variant: "destructive" });
-    }
-  };
-
-  const handleReplyReport = async () => {
-    if (!resposta.trim()) return;
-    try {
-      const { error } = await supabase
-        .from('reports_bugs')
-        .update({
-          resposta_admin: resposta.trim(),
-          status: 'respondido',
-          visto_visitante: false
-        })
-        .eq('id', selectedReport.id);
-
-      if (error) throw error;
-
-      toast({ title: "Resposta enviada!", description: "O usuário receberá a atualização no painel." });
-      setResposta('');
-      setSelectedReport(null);
-      fetchReports();
-    } catch (error) {
-      toast({ title: "Erro ao responder", description: error.message, variant: "destructive" });
     }
   };
 
@@ -251,7 +233,7 @@ const UserApproval = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => { fetchReports(); fetchSuspects(); }}
+            onClick={() => { fetchTickets(); fetchSuspects(); }}
             disabled={loading}
             className="bg-white border-slate-200 text-slate-700 hover:bg-slate-50 font-bold uppercase text-xs tracking-widest px-4"
           >
@@ -268,79 +250,78 @@ const UserApproval = () => {
       ) : activeTab === 'bugs' ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Lista de Reports */}
-          <div className="lg:col-span-7 space-y-4">
-            {reports.length === 0 ? (
+          <div className="lg:col-span-6 space-y-4">
+            {tickets.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-[32px] border border-slate-100 shadow-sm">
                 <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
                   <MessageSquare className="w-8 h-8 text-slate-300" />
                 </div>
                 <h3 className="text-slate-900 font-bold text-lg">Tudo limpo por aqui!</h3>
-                <p className="text-slate-400 text-sm">Nenhum relatório pendente no momento.</p>
+                <p className="text-slate-400 text-sm">Nenhum ticket pendente no momento.</p>
               </div>
             ) : (
               <>
-                {reports.map((report) => (
+                {tickets.map((ticket) => (
                   <Card
-                    key={report.id}
-                    className={`border-none shadow-sm rounded-3xl overflow-hidden transition-all hover:shadow-md cursor-pointer ${selectedReport?.id === report.id ? 'ring-2 ring-indigo-500 bg-indigo-50/30' : 'bg-white'}`}
-                    onClick={() => setSelectedReport(report)}
+                    key={ticket.id}
+                    className={`border-none shadow-sm rounded-3xl overflow-hidden transition-all hover:shadow-md cursor-pointer ${selectedTicket?.id === ticket.id ? 'ring-2 ring-indigo-500 bg-indigo-50/30' : 'bg-white'}`}
+                    onClick={() => setSelectedTicket(ticket)}
                   >
                     <CardContent className="p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-xl ${report.status === 'respondido' ? 'bg-green-100' : 'bg-amber-100'}`}>
-                            <Bug className={`w-5 h-5 ${report.status === 'respondido' ? 'text-green-600' : 'text-amber-600'}`} />
+                          <div className={`p-2 rounded-xl ${ticket.status === 'resolvido' || ticket.status === 'fechado' ? 'bg-green-100' : 'bg-amber-100'}`}>
+                            <Bug className={`w-5 h-5 ${ticket.status === 'resolvido' || ticket.status === 'fechado' ? 'text-green-600' : 'text-amber-600'}`} />
                           </div>
                           <div>
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-black text-slate-400 uppercase tracking-tighter">Visitante:</span>
+                              <span className="text-xs font-black text-slate-400 uppercase tracking-tighter">Protocolo:</span>
                               <span className="text-xs font-bold text-slate-900">
-                                {report.nome_visitante || 'Anônimo'}
+                                {ticket.protocolo}
                               </span>
                             </div>
                             <div className="flex items-center gap-2">
                               <Clock className="w-3 h-3 text-slate-400" />
                               <span className="text-[10px] font-bold text-slate-400 uppercase">
-                                {new Date(report.created_at).toLocaleString('pt-BR')}
+                                {new Date(ticket.created_at).toLocaleString('pt-BR')}
                               </span>
                             </div>
                           </div>
                         </div>
-                        <Badge className={`border-none px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${report.status === 'respondido' ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
-                          {report.status || 'Pendente'}
+                        <Badge className={`border-none px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${ticket.status === 'resolvido' || ticket.status === 'fechado' ? 'bg-green-50 text-green-600' : ticket.status === 'aguardando_visitante' ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-600'}`}>
+                          {ticket.status || 'Aberto'}
                         </Badge>
                       </div>
 
-                      <p className="text-slate-700 text-sm leading-relaxed font-medium bg-slate-50/50 p-4 rounded-2xl mb-4">
-                        "{report.mensagem}"
+                      <p className="text-slate-700 text-sm leading-relaxed font-bold mb-1">
+                        {ticket.assunto}
                       </p>
-
-                      {report.resposta_admin && (
-                        <div className="bg-slate-50 p-4 rounded-2xl mb-4 border-l-4 border-slate-300">
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                            Sua Resposta:
-                          </p>
-                          <p className="text-sm text-slate-700">
-                            {report.resposta_admin}
-                          </p>
-                        </div>
-                      )}
+                      
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                           Visitante: {ticket.nome_visitante || 'Desconhecido'}
+                        </span>
+                      </div>
 
                       <div className="flex justify-between items-center">
-                        {report.status === 'respondido' ? (
+                        {ticket.status === 'resolvido' || ticket.status === 'fechado' ? (
                           <div className="flex items-center gap-2 text-green-600 text-[10px] font-black uppercase">
-                            <MessageSquare className="w-3 h-3" /> Respondido
+                            <CheckCircle2 className="w-3 h-3" /> Concluído
+                          </div>
+                        ) : ticket.status === 'aguardando_visitante' ? (
+                          <div className="flex items-center gap-2 text-indigo-600 text-[10px] font-black uppercase">
+                            <MessageSquare className="w-3 h-3" /> Aguardando Retorno
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 text-indigo-600 text-[10px] font-black uppercase">
-                            <AlertTriangle className="w-3 h-3" /> Necessita Atenção
+                          <div className="flex items-center gap-2 text-amber-600 text-[10px] font-black uppercase">
+                            <AlertTriangle className="w-3 h-3" /> Em Análise
                           </div>
                         )}
 
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.id); }}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteTicket(ticket.id); }}
                           className="h-8 w-8 p-0 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-lg"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -388,58 +369,27 @@ const UserApproval = () => {
           </div>
 
           {/* Painel de Detalhes / Resposta */}
-          <div className="lg:col-span-5">
-            {selectedReport ? (
-              <div className="bg-white rounded-[32px] p-8 shadow-xl border border-indigo-100 sticky top-8 animate-in slide-in-from-right-4 duration-300">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">Responder Relato</h2>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedReport(null)} className="rounded-full">
-                    <X className="w-5 h-5 text-slate-400" />
-                  </Button>
-                </div>
 
-                <div className="space-y-6">
-                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <User className="w-4 h-4 text-slate-400" />
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mensagem do Usuário:</span>
-                    </div>
-                    <p className="text-slate-800 text-sm italic font-medium">"{selectedReport.mensagem}"</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sua Resposta Oficial:</label>
-                    <textarea
-                      value={resposta}
-                      onChange={(e) => setResposta(e.target.value)}
-                      placeholder="Descreva a solução ou orientação para este bug..."
-                      className="w-full p-6 h-40 bg-white border-2 border-slate-100 rounded-[24px] focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50/50 transition-all text-sm resize-none shadow-inner"
-                    />
-                  </div>
-
-                  <div className="flex gap-3">
-                    <Button
-                      disabled={resposta.trim().length < 3}
-                      className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-xs h-14 rounded-2xl shadow-lg shadow-indigo-200 transition-all active:scale-95 disabled:opacity-30"
-                      onClick={handleReplyReport}
-                    >
-                      Enviar Resposta Agora
-                    </Button>
-                  </div>
-
-                  <p className="text-center text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                    O usuário poderá visualizar esta resposta no seu Dashboard pessoal.
-                  </p>
-                </div>
-              </div>
+          <div className="lg:col-span-6 sticky top-8">
+            {selectedTicket ? (
+              <TicketChat 
+                ticket={selectedTicket} 
+                user={user} 
+                isVisitor={false}
+                onBack={() => setSelectedTicket(null)}
+                onStatusChange={(updatedTicket) => {
+                   setSelectedTicket(updatedTicket);
+                   fetchTickets();
+                }}
+              />
             ) : (
               <div className="bg-slate-100/50 rounded-[32px] border-2 border-dashed border-slate-200 h-[400px] flex flex-col items-center justify-center p-8 text-center">
                 <div className="bg-white w-16 h-16 rounded-3xl flex items-center justify-center shadow-sm mb-4">
                   <MessageSquare className="w-6 h-6 text-slate-300" />
                 </div>
-                <h3 className="text-slate-500 font-bold uppercase text-xs tracking-widest">Selecione um relato</h3>
+                <h3 className="text-slate-500 font-bold uppercase text-xs tracking-widest">Selecione um ticket</h3>
                 <p className="text-slate-400 text-[11px] mt-2 max-w-[200px]">
-                  Clique em um relatório à esquerda para ver detalhes e enviar uma resposta ao visitante.
+                  Clique em um ticket à esquerda para ver os detalhes e iniciar o chat.
                 </p>
               </div>
             )}

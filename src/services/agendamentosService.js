@@ -353,3 +353,50 @@ export const fetchTaxaOcupacaoAtualVisitantes = async () => {
   if (totais === 0) return 0;
   return Math.round((ocupadas / totais) * 100);
 };
+
+export const getFaltasVisitanteMes = async (visitanteId, visitanteNome) => {
+  if (!visitanteId || !visitanteNome) return 0;
+
+  const hoje = new Date();
+  const tresMesesAtras = new Date();
+  tresMesesAtras.setMonth(hoje.getMonth() - 3);
+  
+  const inicioBusca = tresMesesAtras.toISOString().split('T')[0];
+  const hojeStr = hoje.toISOString().split('T')[0];
+
+  // 1. Buscar agendamentos aprovados deste visitante nos últimos 3 meses, anteriores a hoje
+  const { data: agendamentos, error: errA } = await supabase
+    .from('agendamentos')
+    .select('id, matricula_preso, vagas_configuracao!inner(data_visita)')
+    .eq('id_visitante', visitanteId)
+    .eq('status', 'aprovado')
+    .gte('vagas_configuracao.data_visita', inicioBusca)
+    .lt('vagas_configuracao.data_visita', hojeStr);
+
+  if (errA || !agendamentos || agendamentos.length === 0) return 0;
+
+  // 2. Normalizar nome do visitante e buscar visitas realizadas neste período
+  const nomeNorm = String(visitanteNome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+  
+  const { data: visitas, error: errV } = await supabase
+    .from('visitas_realizadas')
+    .select('data_visita, matricula_detento')
+    .eq('nome_visitante_normalizado', nomeNorm)
+    .gte('data_visita', inicioBusca)
+    .lt('data_visita', hojeStr);
+
+  if (errV) return 0;
+  
+  // 3. Contar faltas: agendamentos aprovados que não têm correspondência na base de visitas realizadas
+  let faltas = 0;
+  agendamentos.forEach(ag => {
+    const dataVisita = ag.vagas_configuracao.data_visita;
+    const matricula = ag.matricula_preso;
+    const visitou = visitas?.find(v => v.data_visita === dataVisita && v.matricula_detento === matricula);
+    if (!visitou) {
+      faltas++;
+    }
+  });
+
+  return faltas;
+};

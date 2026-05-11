@@ -13,6 +13,24 @@ import { Search, Loader2, CheckCircle, XCircle, AlertTriangle, Calendar, Chevron
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import ImportarPresosPDF from './ImportarPresosPDF';
+
+const gerarMesesAnos = () => {
+  const opcoes = [];
+  const anoAtual = new Date().getFullYear();
+  const limiteAno = Math.max(2026, anoAtual) + 2;
+  const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  for (let ano = 2026; ano <= limiteAno; ano++) {
+    for (let mes = 1; mes <= 12; mes++) {
+      opcoes.push({
+        value: `${ano}-${String(mes).padStart(2, '0')}`,
+        label: `${mesesNomes[mes - 1]} ${ano}`
+      });
+    }
+  }
+  return opcoes;
+};
+const opcoesMesesAnos = gerarMesesAnos();
+
 const AgendamentosAdmin = () => {
   const [agendamentos, setAgendamentos] = useState([]);
   const [mapaMensal, setMapaMensal] = useState({});
@@ -21,8 +39,10 @@ const AgendamentosAdmin = () => {
   const [search, setSearch] = useState('');
   const [statusFiltro, setStatusFiltro] = useState('todos');
   const [dataVisitaFiltro, setDataVisitaFiltro] = useState('');
+  const [mesVisitaFiltro, setMesVisitaFiltro] = useState('');
   const [tipoVisitaFiltro, setTipoVisitaFiltro] = useState('todos');
   const [galeriaFiltro, setGaleriaFiltro] = useState('todos');
+  const [ordenarDataVisita, setOrdenarDataVisita] = useState(false);
 
   const [activeTab, setActiveTab] = useState('agendamentos');
   const [filas, setFilas] = useState([]);
@@ -101,35 +121,48 @@ const AgendamentosAdmin = () => {
     // 🚀 Medindo performance da busca paginada e filtros
     try {
       const result = await measurePerf('FETCH_AGENDAMENTOS_ADMIN', async () => {
-        let query = supabase
-          .from('agendamentos')
-          .select(` 
-            *, 
-            vagas_configuracao!inner (data_visita, horario, galeria, tipo_visita),
-            perfis ( carteirinhas ( parentesco, matricula_preso, menor_idade ) )
-          `, { count: 'exact' });
+        // Sempre usa a view que já consolida analisador_nome e as colunas de vaga.
+        // Isso evita o erro HTTP 300 (ambiguidade de FK) que ocorre ao tentar
+        // fazer dois joins distintos para a mesma tabela 'perfis' na query direta.
+        // Query simplificada: sem joins extras, pois a view já expõe todos os campos necessários
+        // como vaga_data_visita, vaga_horario, vaga_galeria, vaga_tipo_visita e analisador_nome.
+        const selectQuery = `*`;
 
-        if (statusFiltro === 'todos') {
+        let query = supabase
+          .from('view_agendamentos_com_data')
+          .select(selectQuery, { count: 'exact' });
+
+        if (ordenarDataVisita) {
           query = query
-            .order('status', { ascending: false })
-            .order('created_at', { ascending: true });
+            .order('vaga_data_visita', { ascending: true })
+            .order('vaga_horario', { ascending: true });
         } else {
-          query = query.order('created_at', { ascending: true });
+          if (statusFiltro === 'todos') {
+            query = query
+              .order('status', { ascending: false })
+              .order('created_at', { ascending: true });
+          } else {
+            query = query.order('created_at', { ascending: true });
+          }
         }
 
         if (statusFiltro !== 'todos') query = query.eq('status', statusFiltro);
         if (search) {
-          // Ajustado para colunas reais da tabela agendamentos
           query = query.or(`matricula_preso.ilike.%${search}%,visitante1_nome.ilike.%${search}%,nome_preso.ilike.%${search}%,visitante1_carteirinha.ilike.%${search}%,email.ilike.%${search}%`);
         }
         if (dataVisitaFiltro) {
-          query = query.eq('vagas_configuracao.data_visita', dataVisitaFiltro);
+          query = query.eq('vaga_data_visita', dataVisitaFiltro);
+        } else if (mesVisitaFiltro) {
+          const [year, month] = mesVisitaFiltro.split('-');
+          const startDate = `${year}-${month}-01`;
+          const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+          query = query.gte('vaga_data_visita', startDate).lte('vaga_data_visita', endDate);
         }
         if (tipoVisitaFiltro !== 'todos') {
-          query = query.ilike('vagas_configuracao.tipo_visita', `%${tipoVisitaFiltro}%`);
+          query = query.ilike('vaga_tipo_visita', `%${tipoVisitaFiltro}%`);
         }
         if (galeriaFiltro !== 'todos') {
-          query = query.eq('vagas_configuracao.galeria', galeriaFiltro);
+          query = query.eq('vaga_galeria', galeriaFiltro);
         }
 
         query = query.range(from, to);
@@ -148,7 +181,7 @@ const AgendamentosAdmin = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, statusFiltro, search, dataVisitaFiltro, tipoVisitaFiltro, galeriaFiltro]);
+  }, [page, pageSize, statusFiltro, search, dataVisitaFiltro, mesVisitaFiltro, tipoVisitaFiltro, galeriaFiltro, ordenarDataVisita]);
 
   // --- BUSCA DE FILAS DE ESPERA --- 
   const fetchFilas = useCallback(async () => {
@@ -158,7 +191,7 @@ const AgendamentosAdmin = () => {
 
     try {
       let query = supabase
-        .from('fila_espera')
+        .from(ordenarDataVisita ? 'view_fila_espera_com_data' : 'fila_espera')
         .select(`
           *,
           vagas_configuracao!inner(data_visita, horario, galeria, tipo_visita),
@@ -169,19 +202,30 @@ const AgendamentosAdmin = () => {
         query = query.eq('status', statusFiltro);
       }
 
-      query = query.order('created_at', { ascending: true });
+      if (ordenarDataVisita) {
+        query = query
+          .order('vaga_data_visita', { ascending: true })
+          .order('vaga_horario', { ascending: true });
+      } else {
+        query = query.order('created_at', { ascending: true });
+      }
 
       if (search) {
         query = query.or(`matricula_preso.ilike.%${search}%,nome_preso.ilike.%${search}%,perfis.nome.ilike.%${search}%`);
       }
       if (dataVisitaFiltro) {
-        query = query.eq('vagas_configuracao.data_visita', dataVisitaFiltro);
+        query = query.eq(ordenarDataVisita ? 'vaga_data_visita' : 'vagas_configuracao.data_visita', dataVisitaFiltro);
+      } else if (mesVisitaFiltro) {
+        const [year, month] = mesVisitaFiltro.split('-');
+        const startDate = `${year}-${month}-01`;
+        const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+        query = query.gte(ordenarDataVisita ? 'vaga_data_visita' : 'vagas_configuracao.data_visita', startDate).lte(ordenarDataVisita ? 'vaga_data_visita' : 'vagas_configuracao.data_visita', endDate);
       }
       if (tipoVisitaFiltro !== 'todos') {
-        query = query.ilike('vagas_configuracao.tipo_visita', `%${tipoVisitaFiltro}%`);
+        query = query.ilike(ordenarDataVisita ? 'vaga_tipo_visita' : 'vagas_configuracao.tipo_visita', `%${tipoVisitaFiltro}%`);
       }
       if (galeriaFiltro !== 'todos') {
-        query = query.eq('vagas_configuracao.galeria', galeriaFiltro);
+        query = query.eq(ordenarDataVisita ? 'vaga_galeria' : 'vagas_configuracao.galeria', galeriaFiltro);
       }
 
       query = query.range(from, to);
@@ -198,7 +242,7 @@ const AgendamentosAdmin = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, statusFiltro, search, dataVisitaFiltro, tipoVisitaFiltro, galeriaFiltro]);
+  }, [page, pageSize, statusFiltro, search, dataVisitaFiltro, mesVisitaFiltro, tipoVisitaFiltro, galeriaFiltro, ordenarDataVisita]);
 
   useEffect(() => {
     if (activeTab === 'agendamentos') {
@@ -270,10 +314,16 @@ const AgendamentosAdmin = () => {
     addLog('EXECUTE_ACTION_START', { id, novoStatus, finalStatus, motivoRecusa }, 'INFO');
 
     // 🚀 Medindo performance da atualização de status
+    const { data: { user } } = await supabase.auth.getUser();
     const { error } = await measurePerf(`UPDATE_STATUS_AGENDAMENTO_${id}`, async () => {
       return await supabase
         .from('agendamentos')
-        .update({ status: finalStatus, motivo_recusa: motivoRecusa })
+        .update({ 
+          status: finalStatus, 
+          motivo_recusa: motivoRecusa,
+          analisado_por: user?.id,
+          analisado_em: new Date().toISOString()
+        })
         .eq('id', id);
     });
 
@@ -308,65 +358,130 @@ const AgendamentosAdmin = () => {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Filtros */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-        <div className="relative w-full sm:max-w-sm">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-          <Input
-            placeholder="Buscar apenado, matrícula ou visitante..."
-            className="pl-8 bg-white text-gray-900 border-gray-200"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+    <div className="space-y-6">
+      {/* Barra de Filtros Remodelada */}
+      <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 space-y-6">
+        {/* Linha Superior: Busca e Ordenação */}
+        <div className="flex flex-col lg:flex-row gap-4 items-center">
+          <div className="relative flex-1 w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+            <Input
+              placeholder="Buscar por apenado, matrícula, visitante ou email..."
+              className="pl-11 h-12 bg-gray-50/50 text-gray-900 border-gray-200 focus:bg-white transition-all rounded-xl"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          
+          <Button
+            variant={ordenarDataVisita ? "default" : "outline"}
+            className={`h-12 px-6 rounded-xl font-semibold transition-all flex items-center gap-2 shrink-0 ${
+              ordenarDataVisita 
+                ? "bg-[#2D5016] hover:bg-[#1d350f] text-white shadow-lg shadow-green-900/20" 
+                : "border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+            onClick={() => {
+              setOrdenarDataVisita(!ordenarDataVisita);
+              setPage(0);
+            }}
+          >
+            <Calendar className={`w-5 h-5 ${ordenarDataVisita ? "text-white" : "text-gray-400"}`} />
+            {ordenarDataVisita ? "Ordenado por Data/Hora" : "Ordenar por Data/Hora"}
+          </Button>
         </div>
-        <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-4">
-          <Input
-            type="date"
-            className="w-full sm:w-[150px] bg-white text-gray-900 border-gray-200"
-            value={dataVisitaFiltro}
-            onChange={(e) => setDataVisitaFiltro(e.target.value)}
-          />
-          <Select value={statusFiltro} onValueChange={(v) => { setStatusFiltro(v); setPage(0); }}>
-            <SelectTrigger className="w-full sm:w-[180px] bg-white text-gray-900 border-gray-200"><SelectValue placeholder="Status" /></SelectTrigger>
-            <SelectContent className="bg-white">
-              <SelectItem value="todos">Todos Status</SelectItem>
-              {activeTab === 'agendamentos' && (
-                <>
-                  <SelectItem value="pendente">Pendentes</SelectItem>
-                  <SelectItem value="aprovado">Aprovados</SelectItem>
-                  <SelectItem value="cancelado">Cancelados</SelectItem>
-                </>
-              )}
-              {activeTab === 'filas' && (
-                <>
-                  <SelectItem value="ativo">Ativos</SelectItem>
-                  <SelectItem value="promovido">Promovidos</SelectItem>
-                  <SelectItem value="cancelado">Cancelados</SelectItem>
-                </>
-              )}
-            </SelectContent>
-          </Select>
-          <Select value={tipoVisitaFiltro} onValueChange={(v) => { setTipoVisitaFiltro(v); setPage(0); }}>
-            <SelectTrigger className="w-full sm:w-[160px] bg-white text-gray-900 border-gray-200"><SelectValue placeholder="Tipo Visita" /></SelectTrigger>
-            <SelectContent className="bg-white">
-              <SelectItem value="todos">Todos Tipos</SelectItem>
-              <SelectItem value="social">Social</SelectItem>
-              <SelectItem value="intima">Íntima</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={galeriaFiltro} onValueChange={(v) => { setGaleriaFiltro(v); setPage(0); }}>
-            <SelectTrigger className="w-full sm:w-[120px] bg-white text-gray-900 border-gray-200"><SelectValue placeholder="Galeria" /></SelectTrigger>
-            <SelectContent className="bg-white">
-              <SelectItem value="todos">Galerias</SelectItem>
-              <SelectItem value="A">Galeria A</SelectItem>
-              <SelectItem value="B">Galeria B</SelectItem>
-              <SelectItem value="C">Galeria C</SelectItem>
-              <SelectItem value="D">Galeria D</SelectItem>
-              <SelectItem value="E">Galeria E</SelectItem>
-            </SelectContent>
-          </Select>
-          <ImportarPresosPDF onComplete={() => activeTab === 'agendamentos' ? fetchAgendamentos() : fetchFilas()} />
+
+        {/* Linha Inferior: Controles de Filtro */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Dia Específico</label>
+            <Input
+              type="date"
+              className="bg-white text-gray-900 border-gray-200 h-10 rounded-lg"
+              value={dataVisitaFiltro}
+              onChange={(e) => {
+                setDataVisitaFiltro(e.target.value);
+                setMesVisitaFiltro('');
+                setPage(0);
+              }}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Mês/Ano</label>
+            <Select value={mesVisitaFiltro || "todos"} onValueChange={(v) => {
+              const val = v === "todos" ? "" : v;
+              setMesVisitaFiltro(val);
+              if (val !== "") setDataVisitaFiltro('');
+              setPage(0);
+            }}>
+              <SelectTrigger className="bg-white text-gray-900 border-gray-200 h-10 rounded-lg">
+                <SelectValue placeholder="Mês/Ano" />
+              </SelectTrigger>
+              <SelectContent className="bg-white max-h-60">
+                <SelectItem value="todos">Todos os meses</SelectItem>
+                {opcoesMesesAnos.map((opcao) => (
+                  <SelectItem key={opcao.value} value={opcao.value}>
+                    {opcao.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Status</label>
+            <Select value={statusFiltro} onValueChange={(v) => { setStatusFiltro(v); setPage(0); }}>
+              <SelectTrigger className="bg-white text-gray-900 border-gray-200 h-10 rounded-lg"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent className="bg-white">
+                <SelectItem value="todos">Todos Status</SelectItem>
+                {activeTab === 'agendamentos' && (
+                  <>
+                    <SelectItem value="pendente">Pendentes</SelectItem>
+                    <SelectItem value="aprovado">Aprovados</SelectItem>
+                    <SelectItem value="cancelado">Cancelados</SelectItem>
+                  </>
+                )}
+                {activeTab === 'filas' && (
+                  <>
+                    <SelectItem value="ativo">Ativos</SelectItem>
+                    <SelectItem value="promovido">Promovidos</SelectItem>
+                    <SelectItem value="cancelado">Cancelados</SelectItem>
+                  </>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Tipo</label>
+            <Select value={tipoVisitaFiltro} onValueChange={(v) => { setTipoVisitaFiltro(v); setPage(0); }}>
+              <SelectTrigger className="bg-white text-gray-900 border-gray-200 h-10 rounded-lg"><SelectValue placeholder="Tipo Visita" /></SelectTrigger>
+              <SelectContent className="bg-white">
+                <SelectItem value="todos">Todos Tipos</SelectItem>
+                <SelectItem value="social">Social</SelectItem>
+                <SelectItem value="intima">Íntima</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Galeria</label>
+            <Select value={galeriaFiltro} onValueChange={(v) => { setGaleriaFiltro(v); setPage(0); }}>
+              <SelectTrigger className="bg-white text-gray-900 border-gray-200 h-10 rounded-lg"><SelectValue placeholder="Galeria" /></SelectTrigger>
+              <SelectContent className="bg-white">
+                <SelectItem value="todos">Galerias</SelectItem>
+                <SelectItem value="A">Galeria A</SelectItem>
+                <SelectItem value="B">Galeria B</SelectItem>
+                <SelectItem value="C">Galeria C</SelectItem>
+                <SelectItem value="D">Galeria D</SelectItem>
+                <SelectItem value="E">Galeria E</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-end">
+            <ImportarPresosPDF onComplete={() => activeTab === 'agendamentos' ? fetchAgendamentos() : fetchFilas()} />
+          </div>
         </div>
       </div>
       <Tabs
@@ -429,7 +544,7 @@ const AgendamentosAdmin = () => {
                 {loading ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-12"><Loader2 className="animate-spin h-8 w-8 mx-auto text-[#2D5016]" /></TableCell></TableRow>
                 ) : agendamentos.map(item => {
-                  const dataVisString = item.vagas_configuracao?.data_visita;
+                  const dataVisString = item.vaga_data_visita;
                   let chave = "";
                   let mesReferencia = "";
 
@@ -440,7 +555,7 @@ const AgendamentosAdmin = () => {
                   }
 
                   const monitor = mapaMensal[chave] || { sociais: 0, intimas: 0 };
-                  const tipoNormalizado = (item.vagas_configuracao?.tipo_visita || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                  const tipoNormalizado = (item.vaga_tipo_visita || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                   const ehIntima = tipoNormalizado.includes("intima");
                   const limiteAtingido = ehIntima ? monitor.intimas >= 2 : monitor.sociais >= 3;
 
@@ -456,7 +571,7 @@ const AgendamentosAdmin = () => {
                     >
                       <TableCell className="align-middle py-4">
                         <div className="font-medium text-gray-900">{dataVisString ? format(parseISO(dataVisString), 'dd/MM/yyyy') : '-'}</div>
-                        <div className="text-xs text-gray-500">{item.vagas_configuracao?.horario?.slice(0, 5)}</div>
+                        <div className="text-xs text-gray-500">{item.vaga_horario ? String(item.vaga_horario).slice(0, 5) : '-'}</div>
                       </TableCell>
 
                       <TableCell className="align-middle py-4">
@@ -527,20 +642,28 @@ const AgendamentosAdmin = () => {
                       <TableCell className="align-middle py-4">
                         <div className="flex flex-col justify-center gap-0.5">
                           <div className={`inline-flex items-center w-fit gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-bold capitalize ${ehIntima ? 'bg-purple-50 text-purple-700 border border-purple-200' : 'bg-gray-100 text-gray-700 border border-gray-200'}`}>
-                            {item.vagas_configuracao?.tipo_visita}
+                            {item.vaga_tipo_visita}
                           </div>
                           <div className="text-[10px] text-gray-500 font-medium px-0.5">
-                            Galeria {item.vagas_configuracao?.galeria}
+                            Galeria {item.vaga_galeria}
                           </div>
                         </div>
                       </TableCell>
 
                       <TableCell className="align-middle py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${item.status === 'aprovado' ? 'bg-green-50 text-green-700 border-green-200' :
-                          item.status === 'pendente' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'
-                          }`}>
-                          {item.status}
-                        </span>
+                        <div className="flex flex-col gap-1.5">
+                          <span className={`inline-flex items-center w-fit px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${item.status === 'aprovado' ? 'bg-green-50 text-green-700 border-green-200' :
+                            item.status === 'pendente' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : 'bg-red-50 text-red-700 border-red-200'
+                            }`}>
+                            {item.status}
+                          </span>
+                          {item.status !== 'pendente' && (item.analisador?.nome || item.analisador_nome) && item.analisado_em && (
+                            <div className="text-[9px] text-gray-500 leading-tight">
+                              Por: <span className="font-semibold text-gray-700">{(item.analisador?.nome || item.analisador_nome)?.split(' ')[0]}</span><br/>
+                              Em: {new Date(item.analisado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
 
                       <TableCell className="align-middle py-4 max-w-[200px]">
@@ -696,7 +819,7 @@ const AgendamentosAdmin = () => {
                   <div className="flex items-center gap-2 mb-1">
                     <h4 className="text-[10px] font-bold uppercase text-green-700">Apenado</h4>
                     {(() => {
-                      const tipoModal = (detailsModal.data.vagas_configuracao?.tipo_visita || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                      const tipoModal = (detailsModal.data.vaga_tipo_visita || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                       const ehIntimaModal = tipoModal.includes('intima');
                       return ehIntimaModal ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-black uppercase bg-purple-50 text-purple-700 border border-purple-200 ring-2 ring-purple-300">
@@ -708,14 +831,14 @@ const AgendamentosAdmin = () => {
                   <p className="text-lg font-bold text-gray-900">{detailsModal.data.nome_preso}</p>
                   <p className="text-sm text-gray-600 font-mono">Matrícula: {detailsModal.data.matricula_preso}</p>
 
-                  {validacaoPreso.data?.galeria && detailsModal.data.vagas_configuracao?.galeria &&
-                    validacaoPreso.data.galeria.trim().toUpperCase().replace('GALERIA ', '') !== detailsModal.data.vagas_configuracao.galeria.trim().toUpperCase().replace('GALERIA ', '') && (
+                  {validacaoPreso.data?.galeria && detailsModal.data.vaga_galeria &&
+                    validacaoPreso.data.galeria.trim().toUpperCase().replace('GALERIA ', '') !== detailsModal.data.vaga_galeria.trim().toUpperCase().replace('GALERIA ', '') && (
                       <div className="mt-3 bg-black text-white px-3 py-2 rounded-lg border-2 border-red-500 shadow-md flex items-center gap-3">
                         <AlertTriangle className="w-6 h-6 text-yellow-400 shrink-0" />
                         <div>
                           <p className="text-[11px] font-black uppercase tracking-widest text-red-400">Divergência Grave!</p>
                           <p className="text-xs font-medium mt-0.5">
-                            Agendado para Galeria <span className="text-yellow-400 font-bold text-[13px]">{detailsModal.data.vagas_configuracao.galeria}</span>, mas no i-PEN consta <span className="text-yellow-400 font-bold text-[13px]">{validacaoPreso.data.galeria}</span>.
+                            Agendado para Galeria <span className="text-yellow-400 font-bold text-[13px]">{detailsModal.data.vaga_galeria}</span>, mas no i-PEN consta <span className="text-yellow-400 font-bold text-[13px]">{validacaoPreso.data.galeria}</span>.
                           </p>
                         </div>
                       </div>

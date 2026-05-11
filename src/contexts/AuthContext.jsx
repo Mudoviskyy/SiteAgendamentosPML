@@ -157,24 +157,39 @@ export const AuthProvider = ({ children }) => {
     let presenceChannel = null;
 
     const init = async () => {
-      addLog('AuthContext: Calling getSession()');
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      addLog('AuthContext: getSession() Result', { 
-        hasSession: !!session, 
-        hasUser: !!session?.user, 
-        error: error?.message 
-      });
+      try {
+        addLog('AuthContext: Calling getSession()');
+        
+        // Timeout de segurança para evitar carregamento infinito
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout ao buscar sessão')), 10000)
+        );
 
-      if (session?.user) {
-        setUser(session.user);
-        const profileData = await loadProfile(session.user.id);
-        setProfile(profileData);
-        setupPresence(session.user);
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+        
+        addLog('AuthContext: getSession() Result', { 
+          hasSession: !!session, 
+          hasUser: !!session?.user
+        });
+
+        if (session?.user) {
+          setUser(session.user);
+          // Busca perfil com timeout interno implícito no customFetch ou explícito aqui
+          const profileData = await loadProfile(session.user.id);
+          setProfile(profileData);
+          setupPresence(session.user);
+        }
+      } catch (error) {
+        console.error('Erro na inicialização da auth:', error);
+        addLog('AuthContext: Init Error', { error: error.message }, 'ERROR');
+        // Em caso de erro crítico na sessão, limpamos para permitir novo login
+        setUser(null);
+        setProfile(null);
+      } finally {
+        setLoading(false);
+        addLog('AuthContext: Init Complete', { loading: false });
       }
-
-      setLoading(false);
-      addLog('AuthContext: Init Complete', { loading: false });
     };
 
     const setupPresence = (userData) => {

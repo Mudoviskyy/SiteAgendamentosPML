@@ -54,6 +54,7 @@ Thumbs.db
 # Data and sensitive files
 visitas realizadas top 1000.pdf
 *.pdf
+*.txt
 *.csv
 *.xlsx
 *.xls

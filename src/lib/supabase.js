@@ -27,15 +27,23 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Custom fetch to handle connection timeouts/overloads globally
-const customFetch = async (url, options) => {
+const customFetch = async (url, options = {}) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos de timeout
+
   try {
-    const response = await fetch(url, options);
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
     
+    clearTimeout(timeoutId);
+
     // Status codes often associated with server overload or gateway timeouts
     if ([502, 503, 504].includes(response.status)) {
       toast({
         title: "Servidor Carregado",
-        description: "O servidor está com os acessos carregados, por favor tente mais tarde.",
+        description: "O servidor está com muitos acessos, por favor tente em instantes.",
         variant: "destructive",
       });
       
@@ -44,13 +52,21 @@ const customFetch = async (url, options) => {
     
     return response;
   } catch (error) {
+    clearTimeout(timeoutId);
+    
+    if (error.name === 'AbortError') {
+      addLog('SUPABASE_FETCH_TIMEOUT', { url }, 'ERROR');
+      // Não mostramos toast aqui para não irritar o usuário em cada retry, 
+      // mas o log ajuda a diagnosticar.
+    }
+
     // Network errors like "Failed to fetch" often happen during total connection saturation
     const isNetworkError = error instanceof TypeError || error.message?.includes('fetch');
     
-    if (isNetworkError) {
+    if (isNetworkError && error.name !== 'AbortError') {
       toast({
         title: "Erro de Conexão",
-        description: "O servidor está com os acessos carregados, por favor tente mais tarde.",
+        description: "Verifique sua conexão ou tente novamente em breve.",
         variant: "destructive",
       });
       

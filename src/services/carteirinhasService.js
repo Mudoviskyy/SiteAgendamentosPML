@@ -206,6 +206,12 @@ export const carteirinhasService = {
         }
       }
 
+      if (arquivosEnviados.length === 0) {
+        throw new Error(
+          "Falha ao processar os arquivos. Certifique-se de que as fotos estão nítidas e nos formatos aceitos (JPG, PNG ou PDF)."
+        );
+      }
+
       return { success: true, protocol: protocolo };
 
     } catch (error) {
@@ -310,6 +316,10 @@ export const carteirinhasService = {
         }
       }
 
+      if (arquivosEnviados.length === 0) {
+        throw new Error("Não foi possível carregar os documentos do vínculo. Tente novamente.");
+      }
+
       return { success: true, protocol: protocolo };
 
     } catch (error) {
@@ -345,9 +355,13 @@ export const carteirinhasService = {
 
       if (fetchError) throw fetchError;
 
+      const { data: { user } } = await supabase.auth.getUser();
+
       const updates = {
         status,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        analisado_por: user?.id,
+        analisado_em: new Date().toISOString()
       };
 
       if (observacao) {
@@ -558,6 +572,10 @@ export const carteirinhasService = {
           });
           if (insertError) throw insertError;
         }
+      }
+
+      if (arquivosEnviados.length === 0) {
+        throw new Error("Os documentos da criança não foram processados. Tente enviar novamente.");
       }
 
       return { success: true, protocol: protocolo };

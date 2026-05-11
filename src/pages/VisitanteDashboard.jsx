@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Calendar, WalletCards as IdCard, Mail, HelpCircle, AlertCircle } from 'lucide-react';
+import { User, Calendar, WalletCards as IdCard, Mail, HelpCircle, AlertCircle, LifeBuoy } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { subDays } from 'date-fns';
@@ -18,24 +18,21 @@ import ProximaVisitaCard from './visitante/dashboard/components/ProximaVisitaCar
 import PerfilTab from './visitante/dashboard/components/tabs/PerfilTab';
 import AgendamentosTab from './visitante/dashboard/components/tabs/AgendamentosTab';
 import CarteirinhasTab from './visitante/dashboard/components/tabs/CarteirinhasTab';
-import CorrespondenciaTab from './visitante/dashboard/components/tabs/CorrespondenciaTab';
+// import CorrespondenciaTab from './visitante/dashboard/components/tabs/CorrespondenciaTab';
 
 import OrientacoesModal from './visitante/dashboard/modais/OrientacoesModal';
 import TutorialVideoModal from './visitante/dashboard/modais/TutorialVideoModal';
 import RequisitosModal from './visitante/dashboard/modais/RequisitosModal';
 import UpdateProfileModal from './visitante/dashboard/modais/AtualizarPerfilModal';
 import CancelModal from './visitante/dashboard/modais/CancelarAgendamentoModal';
-import ReportIssueModal from './visitante/dashboard/modais/ReportBugModal';
-import RepliesModal from './visitante/dashboard/modais/RespostasReportModal';
+import SuporteTab from './visitante/dashboard/components/tabs/SuporteTab';
 
 const VisitanteDashboard = () => {
   const { user, profile, updateProfile } = useAuth();
   const { toast } = useToast();
 
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showReportModal, setShowReportModal] = useState(false);
   const [showRequisitosModal, setShowRequisitosModal] = useState(false);
-  const [sendingReport, setSendingReport] = useState(false);
 
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [carteirinhaAtiva, setCarteirinhaAtiva] = useState(false);
@@ -49,10 +46,6 @@ const VisitanteDashboard = () => {
   const [vinculos, setVinculos] = useState([]);
   const [menores, setMenores] = useState([]);
   const [showVinculoModal, setShowVinculoModal] = useState(false);
-
-  const [reportsRespondidos, setReportsRespondidos] = useState([]);
-  const [showRepliesModal, setShowRepliesModal] = useState(false);
-  const [loadingReplies, setLoadingReplies] = useState(false);
 
   const [infoModalType, setInfoModalType] = useState(null);
 
@@ -142,103 +135,7 @@ const VisitanteDashboard = () => {
     }
   }, [proximaVisita]);
 
-  const fetchReplyReports = async () => {
-    if (!user?.id) return;
-    setLoadingReplies(true);
-    try {
-      const { data, error } = await supabase
-        .from('reports_bugs')
-        .select('*')
-        .eq('visitante_id', user.id)
-        .eq('status', 'respondido')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setReportsRespondidos(data || []);
-    } catch (error) {
-      console.error('Erro ao buscar respostas dos reports:', error);
-    } finally {
-      setLoadingReplies(false);
-    }
-  };
 
-  const markRepliesAsSeen = async () => {
-    if (!user?.id) return;
-    try {
-      await supabase
-        .from('reports_bugs')
-        .update({ visto_visitante: true })
-        .eq('visitante_id', user.id)
-        .eq('status', 'respondido')
-        .eq('visto_visitante', false);
-    } catch (error) {
-      console.error('Erro ao marcar respostas como vistas:', error);
-    }
-  };
-
-  useEffect(() => {
-    const checkUnreadReplies = async () => {
-      if (!user?.id) return;
-      try {
-        const { data, error } = await supabase
-          .from('reports_bugs')
-          .select('id')
-          .eq('visitante_id', user.id)
-          .eq('status', 'respondido')
-          .eq('visto_visitante', false);
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-          toast({
-            title: "Resposta disponível",
-            description: `Você recebeu ${data.length} resposta(s) sobre report(s) enviado(s).`
-          });
-        }
-      } catch (error) {
-        console.error('Erro ao verificar respostas não lidas: ', error);
-      }
-    };
-    checkUnreadReplies();
-  }, [user, toast]);
-
-  const handleSendReport = async (reportText) => {
-    setSendingReport(true);
-    try {
-      const tresDiasAtras = subDays(new Date(), 3).toISOString();
-      const { data: reportsExistentes } = await supabase
-        .from('reports_bugs')
-        .select('id')
-        .eq('visitante_id', user.id)
-        .gt('created_at', tresDiasAtras);
-
-      if (reportsExistentes && reportsExistentes.length > 0) {
-        toast({
-          title: "Limite de envio",
-          description: "Você já enviou um report nos últimos 3 dias.",
-          variant: "destructive"
-        });
-        setShowReportModal(false);
-        return;
-      }
-
-      const { error } = await supabase.from('reports_bugs').insert({
-        visitante_id: user.id,
-        nome_visitante: profile?.nome,
-        mensagem: reportText.trim(),
-        status: 'aberto',
-        visto_visitante: false
-      });
-      if (error) throw error;
-
-      toast({ title: "Sucesso!", description: "Seu report foi enviado para análise." });
-      setShowReportModal(false);
-
-    } catch (err) {
-      toast({ title: "Erro", description: "Não foi possível enviar o report.", variant: "destructive" });
-    } finally {
-      setSendingReport(false);
-    }
-  };
 
   const handleCancelarAgendamento = async () => {
     if (!selectedAgendamentoId || !user?.id) return;
@@ -296,8 +193,9 @@ const VisitanteDashboard = () => {
               <TabsTrigger value="perfil" className="py-2.5 px-6 font-bold uppercase text-xs tracking-widest data-[state=active]:bg-white rounded-lg"><User className="w-3.5 h-3.5 mr-2" /> Meus Dados</TabsTrigger>
               <TabsTrigger value="agendamentos" className="py-2.5 px-6 font-bold uppercase text-xs tracking-widest data-[state=active]:bg-white rounded-lg"><Calendar className="w-3.5 h-3.5 mr-2" /> Agendamentos</TabsTrigger>
               <TabsTrigger value="carteirinha" className="py-2.5 px-6 font-bold uppercase text-xs tracking-widest data-[state=active]:bg-white rounded-lg"><IdCard className="w-3.5 h-3.5 mr-2" /> Carteirinha</TabsTrigger>
-              <TabsTrigger value="correspondencia" className="py-2.5 px-6 font-bold uppercase text-xs tracking-widest data-[state=active]:bg-white rounded-lg"><Mail className="w-3.5 h-3.5 mr-2" /> Correspondência</TabsTrigger>
+              {/* <TabsTrigger value="correspondencia" className="py-2.5 px-6 font-bold uppercase text-xs tracking-widest data-[state=active]:bg-white rounded-lg"><Mail className="w-3.5 h-3.5 mr-2" /> Correspondência</TabsTrigger> */}
               <TabsTrigger value="faq" className="py-2.5 px-6 font-bold uppercase text-xs tracking-widest data-[state=active]:bg-white rounded-lg"><HelpCircle className="w-3.5 h-3.5 mr-2" /> Ajuda</TabsTrigger>
+              <TabsTrigger value="suporte" className="py-2.5 px-6 font-bold uppercase text-xs tracking-widest data-[state=active]:bg-white rounded-lg"><LifeBuoy className="w-3.5 h-3.5 mr-2" /> Suporte</TabsTrigger>
             </TabsList>
 
             <TabsContent value="perfil">
@@ -305,9 +203,6 @@ const VisitanteDashboard = () => {
                 user={user}
                 profile={profile}
                 setShowVideoModal={setShowVideoModal}
-                fetchReplyReports={fetchReplyReports}
-                setShowRepliesModal={setShowRepliesModal}
-                setShowReportModal={setShowReportModal}
               />
             </TabsContent>
 
@@ -332,9 +227,9 @@ const VisitanteDashboard = () => {
               />
             </TabsContent>
 
-            <TabsContent value="correspondencia">
+            {/* <TabsContent value="correspondencia">
               <CorrespondenciaTab />
-            </TabsContent>
+            </TabsContent> */}
 
             <TabsContent value="faq" className="space-y-6 animate-in fade-in-50">
               <div className="bg-white border-none shadow-sm rounded-2xl p-8">
@@ -349,6 +244,10 @@ const VisitanteDashboard = () => {
                 </div>
                 <FAQAccordion />
               </div>
+            </TabsContent>
+
+            <TabsContent value="suporte">
+              <SuporteTab user={user} profile={profile} />
             </TabsContent>
           </Tabs>
         </main>
@@ -373,20 +272,7 @@ const VisitanteDashboard = () => {
           isCanceling={isCanceling} 
         />
         
-        <ReportIssueModal 
-          isOpen={showReportModal} 
-          onClose={() => setShowReportModal(false)} 
-          onSendReport={handleSendReport} 
-          sendingReport={sendingReport} 
-        />
-        
-        <RepliesModal 
-          isOpen={showRepliesModal} 
-          onClose={() => setShowRepliesModal(false)} 
-          reportsRespondidos={reportsRespondidos} 
-          loadingReplies={loadingReplies} 
-          markRepliesAsSeen={markRepliesAsSeen} 
-        />
+
 
         <AdicionarVinculoModal
           isOpen={showVinculoModal}

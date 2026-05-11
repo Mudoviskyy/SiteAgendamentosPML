@@ -17,10 +17,7 @@ const formatLocalDate = (dateString) => {
 const PerfilTab = ({
   user,
   profile,
-  setShowVideoModal,
-  fetchReplyReports,
-  setShowRepliesModal,
-  setShowReportModal
+  setShowVideoModal
 }) => {
   return (
     <div className="space-y-6 animate-in fade-in-50">
@@ -103,23 +100,6 @@ const PerfilTab = ({
                 className="justify-start h-10 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 text-[10px] font-bold uppercase tracking-wider"
               >
                 <PlayCircle className="w-4 h-4 mr-3" /> Guia de Agendamento
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={async () => {
-                  await fetchReplyReports();
-                  setShowRepliesModal(true);
-                }}
-                className="justify-start h-10 text-slate-500 hover:text-blue-600 hover:bg-blue-50 text-[10px] font-bold uppercase tracking-wider"
-              >
-                <Mail className="w-4 h-4 mr-3" /> Histórico de Chamados
-              </Button>
-              <Button
-                variant="ghost"
-                onClick={() => setShowReportModal(true)}
-                className="justify-start h-10 text-slate-500 hover:text-amber-600 hover:bg-amber-50 text-[10px] font-bold uppercase tracking-wider"
-              >
-                <Bug className="w-4 h-4 mr-3" /> Reportar Inconformidade
               </Button>
             </div>
           </div>

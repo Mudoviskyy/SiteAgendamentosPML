@@ -14,16 +14,41 @@ export const comprimirArquivo = async (file) => {
     return file;
   }
 
+  if (file.size < 250 * 1024) {
+    return file;
+  }
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
   const options = {
     maxSizeMB: 0.8,
-    maxWidthOrHeight: 1920,
-    useWebWorker: true,
+    maxWidthOrHeight: isIOS ? 1600 : 1920,
+    useWebWorker: !isIOS,
     initialQuality: 0.8,
   };
 
   try {
     const compressedBlob = await imageCompression(file, options);
-    return new File([compressedBlob], file.name, { type: file.type });
+    
+    if (!compressedBlob || compressedBlob.size === 0) {
+      console.warn("Compressão vazia. Usando original.");
+      return file;
+    }
+
+    let finalFile;
+    if (compressedBlob instanceof File) {
+      finalFile = compressedBlob;
+    } else {
+      finalFile = new File([compressedBlob], file.name, { 
+        type: file.type || compressedBlob.type || 'image/jpeg' 
+      });
+    }
+
+    if (!finalFile || !finalFile.size || finalFile.size === 0) {
+      return file;
+    }
+
+    return finalFile;
   } catch (error) {
     console.error("Erro na compressão:", error);
     return file;
@@ -36,6 +61,22 @@ const UploadDocsMenor = ({ id, label, descricao = "PNG, JPG ou PDF", file, handl
   const onInputChange = (e) => {
     const f = e.target.files[0];
     if (!f) return;
+
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    const allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png'];
+
+    const type = f.type.toLowerCase();
+    const extension = f.name.split('.').pop().toLowerCase();
+
+    if (!allowedTypes.includes(type) && !allowedExtensions.includes(extension)) {
+      toast({
+        title: "Formato inválido",
+        description: `Somente arquivos JPG, JPEG, PNG e PDF são aceitos. Arquivo recusado: "${f.name}".`,
+        className: "bg-red-500 text-white border-none"
+      });
+      e.target.value = "";
+      return;
+    }
 
     const isPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
 

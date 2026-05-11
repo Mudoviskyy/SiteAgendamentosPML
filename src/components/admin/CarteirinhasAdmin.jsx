@@ -225,9 +225,15 @@ const CarteirinhasAdmin = () => {
     addLog('CARTEIRINHA_REJECTION', { id: carteirinhaId, type: finalStatus }, 'WARN');
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       const { error } = await supabase
         .from('carteirinhas')
-        .update({ status: finalStatus, motivo_cancelamento: motivoCancelamento })
+        .update({ 
+           status: finalStatus, 
+           motivo_cancelamento: motivoCancelamento,
+           analisado_por: user?.id,
+           analisado_em: new Date().toISOString()
+        })
         .eq('id', carteirinhaId);
 
       if (error) throw error;
@@ -513,15 +519,15 @@ const CarteirinhasAdmin = () => {
   const getStatusBadge = (status) => {
     switch (status?.toLowerCase()) {
       case 'aprovado':
-        return <Badge className="bg-[#2D5016] text-white border-none uppercase text-[10px] font-black">Aprovado</Badge>;
+        return <span className="inline-flex items-center w-fit px-2.5 py-1 rounded-full text-[10px] font-black uppercase border bg-green-50 text-green-700 border-green-200">Aprovado</span>;
       case 'pendente':
-        return <Badge className="bg-yellow-500 text-white border-none uppercase text-[10px] font-black">Pendente</Badge>;
+        return <span className="inline-flex items-center w-fit px-2.5 py-1 rounded-full text-[10px] font-black uppercase border bg-yellow-50 text-yellow-700 border-yellow-200">Pendente</span>;
       case 'recusado':
-        return <Badge className="bg-red-600 text-white border-none uppercase text-[10px] font-black">Recusado</Badge>;
+        return <span className="inline-flex items-center w-fit px-2.5 py-1 rounded-full text-[10px] font-black uppercase border bg-red-50 text-red-700 border-red-200">Recusado</span>;
       case 'cancelado':
-        return <Badge className="bg-red-800 text-white border-none uppercase text-[10px] font-black">Cancelado</Badge>;
+        return <span className="inline-flex items-center w-fit px-2.5 py-1 rounded-full text-[10px] font-black uppercase border bg-red-100 text-red-800 border-red-300">Cancelado</span>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <span className="inline-flex items-center w-fit px-2.5 py-1 rounded-full text-[10px] font-black uppercase border bg-gray-50 text-gray-700 border-gray-200">{status}</span>;
     }
   };
 
@@ -710,7 +716,17 @@ const CarteirinhasAdmin = () => {
                       </div>
                     )}
                   </TableCell>
-                  <TableCell className="align-middle py-4">{getStatusBadge(c.status)}</TableCell>
+                  <TableCell className="align-middle py-4">
+                    <div className="flex flex-col gap-1.5">
+                      {getStatusBadge(c.status)}
+                      {c.status !== 'pendente' && c.analisador_nome && c.analisado_em && (
+                        <div className="text-[9px] text-gray-500 leading-tight mt-1">
+                          Por: <span className="font-semibold text-gray-700">{c.analisador_nome.split(' ')[0]}</span><br/>
+                          Em: {new Date(c.analisado_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="align-middle py-4 max-w-[200px]">
                     {c.validade && (
                       <div className="text-[10px] text-green-700 font-bold uppercase">
