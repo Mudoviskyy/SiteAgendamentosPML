@@ -189,250 +189,250 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
 
   return (
     <>
-    <ProcessingModal isOpen={showProcessing} />
-    <UploadErrorModal
-      isOpen={uploadError !== null}
-      onClose={() => setUploadError(null)}
-      errorMessage={uploadError}
-    />
-    <form onSubmit={handleSubmit} className="space-y-8">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          {fluxoAtivo === 'novo' && <><FileText className="w-5 h-5 text-cyan-500" /> Nova Carteirinha (1ª Via)</>}
-          {fluxoAtivo === 'renovacao' && <><RefreshCcw className="w-5 h-5 text-cyan-500" /> Renovação da Carteirinha</>}
-          {fluxoAtivo === 'ja_tenho' && <><CheckCircle2 className="w-5 h-5 text-cyan-500" /> Sincronizar Existente</>}
-        </h3>
-        <Button type="button" variant="ghost" onClick={() => setFluxoAtivo(null)} className="text-slate-500 h-8 px-2 text-xs font-bold uppercase tracking-wider">
-          Alterar
-        </Button>
-      </div>
-
-      {/* DADOS DO RESPONSÁVEL E CONTATO */}
-      <div className="space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-        <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider">Responsável pelo Menor</h3>
-        <div className="grid grid-cols-1 gap-6">
-          <div className="space-y-2">
-            <Label className="text-slate-600 font-bold text-red-600">Você é o que do Menor? *</Label>
-            <Select value={formData.parentesco} onValueChange={(v) => setFormData({ ...formData, parentesco: v })}>
-              <SelectTrigger className="bg-white border-slate-200">
-                <SelectValue placeholder="Selecione o parentesco" />
-              </SelectTrigger>
-              <SelectContent className="bg-white">
-                <SelectItem value="Pai">Pai</SelectItem>
-                <SelectItem value="Mãe">Mãe</SelectItem>
-                <SelectItem value="Autorização Judicial">Autorização Judicial / Guarda</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <ProcessingModal isOpen={showProcessing} />
+      <UploadErrorModal
+        isOpen={uploadError !== null}
+        onClose={() => setUploadError(null)}
+        errorMessage={uploadError}
+      />
+      <form onSubmit={handleSubmit} className="space-y-8">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+            {fluxoAtivo === 'novo' && <><FileText className="w-5 h-5 text-cyan-500" /> Nova Carteirinha (1ª Via)</>}
+            {fluxoAtivo === 'renovacao' && <><RefreshCcw className="w-5 h-5 text-cyan-500" /> Renovação da Carteirinha</>}
+            {fluxoAtivo === 'ja_tenho' && <><CheckCircle2 className="w-5 h-5 text-cyan-500" /> Sincronizar Existente</>}
+          </h3>
+          <Button type="button" variant="ghost" onClick={() => setFluxoAtivo(null)} className="text-slate-500 h-8 px-2 text-xs font-bold uppercase tracking-wider">
+            Alterar
+          </Button>
         </div>
-      </div>
 
-      {/* DADOS DO MENOR */}
-      <div className="space-y-6 bg-cyan-50/50 p-6 rounded-2xl border border-cyan-100">
-        <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider flex items-center gap-2">
-          <UserSquare2 className="w-4 h-4" /> Dados do Menor
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label className="text-slate-600 font-bold text-red-600">Nome Completo do Menor *</Label>
-            <Input
-              value={formData.nome_menor}
-              onChange={(e) => setFormData({ ...formData, nome_menor: e.target.value.toUpperCase() })}
-              placeholder="NOME COMPLETO"
-              className="uppercase bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500 font-bold"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-slate-600 font-bold text-red-600">Data de Nascimento *</Label>
-            <div className="grid grid-cols-3 gap-2">
-              <Select value={dataNascimento.dia} onValueChange={(v) => setDataNascimento({ ...dataNascimento, dia: v })}>
-                <SelectTrigger className="bg-white"><SelectValue placeholder="Dia" /></SelectTrigger>
-                <SelectContent className="bg-white h-64">{dias.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={dataNascimento.mes} onValueChange={(v) => setDataNascimento({ ...dataNascimento, mes: v })}>
-                <SelectTrigger className="bg-white"><SelectValue placeholder="Mês" /></SelectTrigger>
-                <SelectContent className="bg-white h-64">{meses.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={dataNascimento.ano} onValueChange={(v) => setDataNascimento({ ...dataNascimento, ano: v })}>
-                <SelectTrigger className="bg-white"><SelectValue placeholder="Ano" /></SelectTrigger>
-                <SelectContent className="bg-white h-64">{anosMenor.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+        {/* DADOS DO RESPONSÁVEL E CONTATO */}
+        <div className="space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+          <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider">Responsável pelo Menor</h3>
+          <div className="grid grid-cols-1 gap-6">
+            <div className="space-y-2">
+              <Label className="text-slate-600 font-bold text-red-600">Você é o que do Menor? *</Label>
+              <Select value={formData.parentesco} onValueChange={(v) => setFormData({ ...formData, parentesco: v })}>
+                <SelectTrigger className="bg-white border-slate-200">
+                  <SelectValue placeholder="Selecione o parentesco" />
+                </SelectTrigger>
+                <SelectContent className="bg-white">
+                  <SelectItem value="Pai">Pai</SelectItem>
+                  <SelectItem value="Mãe">Mãe</SelectItem>
+                  <SelectItem value="Autorização Judicial">Autorização Judicial / Guarda</SelectItem>
+                </SelectContent>
               </Select>
             </div>
           </div>
-          <div className="space-y-2">
-            <Label className="text-slate-600 font-bold">
-              {tipoIdentificacao === TIPOS_IDENTIFICACAO.CPF ? "CPF do Menor (Opcional)" : "Identificação do Menor (Opcional)"}
-            </Label>
-            <Input
-              value={formData.cpf_menor}
-              onChange={(e) => {
-                if (tipoIdentificacao === TIPOS_IDENTIFICACAO.CPF) {
-                  let val = e.target.value.replace(/\D/g, '');
-                  if (val.length > 11) val = val.slice(0, 11);
-                  val = val.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-                  setFormData({ ...formData, cpf_menor: val });
-                } else {
-                  setFormData({ ...formData, cpf_menor: e.target.value.toUpperCase().slice(0, 20) });
-                }
-              }}
-              placeholder={tipoIdentificacao === TIPOS_IDENTIFICACAO.CPF ? "000.000.000-00" : "Nº do Documento do Menor"}
-              className="bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500 font-mono"
-            />
+        </div>
+
+        {/* DADOS DO MENOR */}
+        <div className="space-y-6 bg-cyan-50/50 p-6 rounded-2xl border border-cyan-100">
+          <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider flex items-center gap-2">
+            <UserSquare2 className="w-4 h-4" /> Dados do Menor
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label className="text-slate-600 font-bold text-red-600">Nome Completo do Menor *</Label>
+              <Input
+                value={formData.nome_menor}
+                onChange={(e) => setFormData({ ...formData, nome_menor: e.target.value.toUpperCase() })}
+                placeholder="NOME COMPLETO"
+                className="uppercase bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500 font-bold"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-600 font-bold text-red-600">Data de Nascimento *</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <Select value={dataNascimento.dia} onValueChange={(v) => setDataNascimento({ ...dataNascimento, dia: v })}>
+                  <SelectTrigger className="bg-white"><SelectValue placeholder="Dia" /></SelectTrigger>
+                  <SelectContent className="bg-white h-64">{dias.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={dataNascimento.mes} onValueChange={(v) => setDataNascimento({ ...dataNascimento, mes: v })}>
+                  <SelectTrigger className="bg-white"><SelectValue placeholder="Mês" /></SelectTrigger>
+                  <SelectContent className="bg-white h-64">{meses.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={dataNascimento.ano} onValueChange={(v) => setDataNascimento({ ...dataNascimento, ano: v })}>
+                  <SelectTrigger className="bg-white"><SelectValue placeholder="Ano" /></SelectTrigger>
+                  <SelectContent className="bg-white h-64">{anosMenor.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-600 font-bold">
+                {tipoIdentificacao === TIPOS_IDENTIFICACAO.CPF ? "CPF do Menor (Opcional)" : "Identificação do Menor (Opcional)"}
+              </Label>
+              <Input
+                value={formData.cpf_menor}
+                onChange={(e) => {
+                  if (tipoIdentificacao === TIPOS_IDENTIFICACAO.CPF) {
+                    let val = e.target.value.replace(/\D/g, '');
+                    if (val.length > 11) val = val.slice(0, 11);
+                    val = val.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                    setFormData({ ...formData, cpf_menor: val });
+                  } else {
+                    setFormData({ ...formData, cpf_menor: e.target.value.toUpperCase().slice(0, 20) });
+                  }
+                }}
+                placeholder={tipoIdentificacao === TIPOS_IDENTIFICACAO.CPF ? "000.000.000-00" : "Nº do Documento do Menor"}
+                className="bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500 font-mono"
+              />
+            </div>
+            {fluxoAtivo === 'renovacao' && (
+              <div className="space-y-2">
+                <Label className="text-slate-600 font-bold text-red-600 flex items-center gap-2">
+                  Prontuário da Carteirinha (Menor) *
+                  <BadgeInfo className="w-4 h-4 text-slate-400" />
+                </Label>
+                <Input
+                  value={formData.prontuario_menor}
+                  onChange={(e) => setFormData({ ...formData, prontuario_menor: e.target.value.replace(/\D/g, '') })}
+                  placeholder="Somente os 6 números"
+                  maxLength={6}
+                  className="bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500 font-mono"
+                />
+                <p className="text-xs text-slate-500">Exigido para renovação (presente na carteirinha vencida).</p>
+              </div>
+            )}
           </div>
-          {fluxoAtivo === 'renovacao' && (
+        </div>
+
+        {/* VÍNCULO CARCERÁRIO */}
+        <div className="space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+          <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider">Vínculo Carcerário</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+            <div className="space-y-2">
+              <Label className="text-slate-600 font-bold text-red-600">Nome do Detento *</Label>
+              {carteirinhasAprovadas.length > 0 ? (
+                <Select
+                  value={formData.nome_apenado}
+                  onValueChange={(val) => {
+                    const c = carteirinhasAprovadas.find(x => x.nome_apenado === val);
+                    setFormData(prev => ({ ...prev, nome_apenado: val, matricula_preso: c?.matricula_preso || '' }));
+                  }}
+                >
+                  <SelectTrigger className="bg-white border-slate-200">
+                    <SelectValue placeholder="Selecione o detento" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white">
+                    {carteirinhasAprovadas.map(c => (
+                      <SelectItem key={c.nome_apenado} value={c.nome_apenado}>
+                        {c.nome_apenado} {c.matricula_preso && `(${c.matricula_preso})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={formData.nome_apenado}
+                  onChange={(e) => setFormData({ ...formData, nome_apenado: e.target.value.toUpperCase() })}
+                  placeholder="NOME COMPLETO DO DETENTO"
+                  className="uppercase bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500"
+                />
+              )}
+            </div>
             <div className="space-y-2">
               <Label className="text-slate-600 font-bold text-red-600 flex items-center gap-2">
-                Prontuário da Carteirinha (Menor) *
+                Matrícula do Detento (IPEN) *
                 <BadgeInfo className="w-4 h-4 text-slate-400" />
               </Label>
               <Input
-                value={formData.prontuario_menor}
-                onChange={(e) => setFormData({ ...formData, prontuario_menor: e.target.value.replace(/\D/g, '') })}
+                value={formData.matricula_preso}
+                onChange={(e) => setFormData({ ...formData, matricula_preso: e.target.value.replace(/\D/g, '') })}
                 placeholder="Somente os 6 números"
                 maxLength={6}
                 className="bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500 font-mono"
               />
-              <p className="text-xs text-slate-500">Exigido para renovação (presente na carteirinha vencida).</p>
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* VÍNCULO CARCERÁRIO */}
-      <div className="space-y-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-        <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider">Vínculo Carcerário</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
-          <div className="space-y-2">
-            <Label className="text-slate-600 font-bold text-red-600">Nome do Detento *</Label>
-            {carteirinhasAprovadas.length > 0 ? (
-              <Select
-                value={formData.nome_apenado}
-                onValueChange={(val) => {
-                  const c = carteirinhasAprovadas.find(x => x.nome_apenado === val);
-                  setFormData(prev => ({ ...prev, nome_apenado: val, matricula_preso: c?.matricula_preso || '' }));
-                }}
-              >
-                <SelectTrigger className="bg-white border-slate-200">
-                  <SelectValue placeholder="Selecione o detento" />
-                </SelectTrigger>
-                <SelectContent className="bg-white">
-                  {carteirinhasAprovadas.map(c => (
-                    <SelectItem key={c.nome_apenado} value={c.nome_apenado}>
-                      {c.nome_apenado} {c.matricula_preso && `(${c.matricula_preso})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <Input
-                value={formData.nome_apenado}
-                onChange={(e) => setFormData({ ...formData, nome_apenado: e.target.value.toUpperCase() })}
-                placeholder="NOME COMPLETO DO DETENTO"
-                className="uppercase bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500"
-              />
-            )}
-          </div>
-          <div className="space-y-2">
-            <Label className="text-slate-600 font-bold text-red-600 flex items-center gap-2">
-              Matrícula do Detento (IPEN) *
-              <BadgeInfo className="w-4 h-4 text-slate-400" />
-            </Label>
-            <Input
-              value={formData.matricula_preso}
-              onChange={(e) => setFormData({ ...formData, matricula_preso: e.target.value.replace(/\D/g, '') })}
-              placeholder="Somente os 6 números"
-              maxLength={6}
-              className="bg-white border-slate-200 focus:border-cyan-500 focus:ring-cyan-500 font-mono"
-            />
           </div>
         </div>
-      </div>
 
-      {/* DOCUMENTAÇÃO */}
-      <div className="space-y-6">
-        <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider flex items-center gap-2">
-          <FileText className="w-4 h-4" /> Envio de Documentos
-        </h3>
+        {/* DOCUMENTAÇÃO */}
+        <div className="space-y-6">
+          <h3 className="text-sm font-bold text-cyan-600 uppercase tracking-wider flex items-center gap-2">
+            <FileText className="w-4 h-4" /> Envio de Documentos
+          </h3>
 
-        {fluxoAtivo === 'ja_tenho' ? (
-          <div className="space-y-8">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-blue-600" />
-                <h4 className="text-blue-800 font-bold m-0 leading-none">Instruções para Sincronização</h4>
+          {fluxoAtivo === 'ja_tenho' ? (
+            <div className="space-y-8">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-blue-600" />
+                  <h4 className="text-blue-800 font-bold m-0 leading-none">Instruções para Sincronização</h4>
+                </div>
+                <p className="text-blue-700 text-sm ml-6">
+                  Envie uma foto legível da carteirinha oficial do menor. Informe a data de emissão impressa nela para o cálculo da validade (2 anos).
+                </p>
               </div>
-              <p className="text-blue-700 text-sm ml-6">
-                Envie uma foto legível da carteirinha oficial do menor. Informe a data de emissão impressa nela para o cálculo da validade (2 anos).
-              </p>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <UploadDocsMenor
-                id="carteirinha_oficial"
-                label="Carteirinha Oficial (Menor) *"
-                descricao="Frente e Verso se possível"
-                file={documentos.carteirinha_oficial}
-                handleFileChange={handleFileChange}
-                clearFile={clearFile}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <UploadDocsMenor
+                  id="carteirinha_oficial"
+                  label="Carteirinha Oficial (Menor) *"
+                  descricao="Frente e Verso se possível"
+                  file={documentos.carteirinha_oficial}
+                  handleFileChange={handleFileChange}
+                  clearFile={clearFile}
+                />
 
-              <div className="space-y-4">
-                <Label className="text-slate-600 font-bold text-red-600">Data de Emissão (Consta na Carteirinha) *</Label>
-                <div className="grid grid-cols-3 gap-2">
-                  <Select value={dataEmissao.dia} onValueChange={(v) => setDataEmissao({ ...dataEmissao, dia: v })}>
-                    <SelectTrigger className="bg-white"><SelectValue placeholder="Dia" /></SelectTrigger>
-                    <SelectContent className="bg-white h-64">{dias.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <Select value={dataEmissao.mes} onValueChange={(v) => setDataEmissao({ ...dataEmissao, mes: v })}>
-                    <SelectTrigger className="bg-white"><SelectValue placeholder="Mês" /></SelectTrigger>
-                    <SelectContent className="bg-white h-64">{meses.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <Select value={dataEmissao.ano} onValueChange={(v) => setDataEmissao({ ...dataEmissao, ano: v })}>
-                    <SelectTrigger className="bg-white"><SelectValue placeholder="Ano" /></SelectTrigger>
-                    <SelectContent className="bg-white">{anosEmissao.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
-                  </Select>
+                <div className="space-y-4">
+                  <Label className="text-slate-600 font-bold text-red-600">Data de Emissão (Consta na Carteirinha) *</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Select value={dataEmissao.dia} onValueChange={(v) => setDataEmissao({ ...dataEmissao, dia: v })}>
+                      <SelectTrigger className="bg-white"><SelectValue placeholder="Dia" /></SelectTrigger>
+                      <SelectContent className="bg-white h-64">{dias.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={dataEmissao.mes} onValueChange={(v) => setDataEmissao({ ...dataEmissao, mes: v })}>
+                      <SelectTrigger className="bg-white"><SelectValue placeholder="Mês" /></SelectTrigger>
+                      <SelectContent className="bg-white h-64">{meses.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={dataEmissao.ano} onValueChange={(v) => setDataEmissao({ ...dataEmissao, ano: v })}>
+                      <SelectTrigger className="bg-white"><SelectValue placeholder="Ano" /></SelectTrigger>
+                      <SelectContent className="bg-white">{anosEmissao.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <UploadDocsMenor id="foto_3x4" label="Foto 3x4 do Menor *" descricao="Fundo branco, rosto nítido" file={documentos.foto_3x4} handleFileChange={handleFileChange} clearFile={clearFile} />
-            <UploadDocsMenor id="responsavel_rg_frente" label="Seu RG (Frente) *" descricao="Documento do Responsável" file={documentos.responsavel_rg_frente} handleFileChange={handleFileChange} clearFile={clearFile} />
-            <UploadDocsMenor id="responsavel_rg_verso" label="Seu RG (Verso) *" descricao="Documento do Responsável" file={documentos.responsavel_rg_verso} handleFileChange={handleFileChange} clearFile={clearFile} />
-            <UploadDocsMenor id="menor_rg_frente" label="RG do Menor (Frente) *" descricao="Documento do Menor" file={documentos.menor_rg_frente} handleFileChange={handleFileChange} clearFile={clearFile} />
-            <UploadDocsMenor id="menor_rg_verso" label="RG do Menor (Verso) *" descricao="Documento do Menor" file={documentos.menor_rg_verso} handleFileChange={handleFileChange} clearFile={clearFile} />
-            <UploadDocsMenor id="certidao_nascimento" label="Certidão de Nascimento *" descricao="Documento do Menor" file={documentos.certidao_nascimento} handleFileChange={handleFileChange} clearFile={clearFile} />
-            <UploadDocsMenor id="declaracao_vacina" label="Declaração de Vacina *" descricao="Emissão recente" file={documentos.declaracao_vacina} handleFileChange={handleFileChange} clearFile={clearFile} />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <UploadDocsMenor id="foto_3x4" label="Foto 3x4 do Menor (pode ser do celular) *" descricao="Fundo branco, rosto nítido" file={documentos.foto_3x4} handleFileChange={handleFileChange} clearFile={clearFile} />
+              <UploadDocsMenor id="responsavel_rg_frente" label="Seu RG (Frente) *" descricao="Documento do Responsável" file={documentos.responsavel_rg_frente} handleFileChange={handleFileChange} clearFile={clearFile} />
+              <UploadDocsMenor id="responsavel_rg_verso" label="Seu RG (Verso) *" descricao="Documento do Responsável" file={documentos.responsavel_rg_verso} handleFileChange={handleFileChange} clearFile={clearFile} />
+              <UploadDocsMenor id="menor_rg_frente" label="RG do Menor (Frente) *" descricao="Documento do Menor" file={documentos.menor_rg_frente} handleFileChange={handleFileChange} clearFile={clearFile} />
+              <UploadDocsMenor id="menor_rg_verso" label="RG do Menor (Verso) *" descricao="Documento do Menor" file={documentos.menor_rg_verso} handleFileChange={handleFileChange} clearFile={clearFile} />
+              <UploadDocsMenor id="certidao_nascimento" label="Certidão de Nascimento *" descricao="Documento do Menor" file={documentos.certidao_nascimento} handleFileChange={handleFileChange} clearFile={clearFile} />
+              <UploadDocsMenor id="declaracao_vacina" label="Declaração de Vacina *" descricao="Emissão recente" file={documentos.declaracao_vacina} handleFileChange={handleFileChange} clearFile={clearFile} />
 
-            {formData.parentesco === 'Autorização Judicial' && (
-              <div className="md:col-span-2 border-2 border-cyan-200 rounded-xl p-4 bg-cyan-50/30">
-                <UploadDocsMenor id="documento_autorizacao_legal" label="Autorização Judicial / Guarda *" descricao="Obrigatório para este tipo de parentesco" file={documentos.documento_autorizacao_legal} handleFileChange={handleFileChange} clearFile={clearFile} />
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-start gap-3">
-        <Loader2 className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
-        <div className="space-y-1">
-          <h4 className="text-sm font-bold text-blue-900">Processamento Seguro de Arquivos</h4>
-          <p className="text-xs text-blue-800 leading-relaxed">
-            Ao enviar para análise, seus arquivos serão convertidos e otimizados automaticamente antes de serem enviados aos nossos servidores. Este processo ocorre no seu dispositivo para economizar dados e garantir que as fotos mantenham a qualidade necessária para a confecção da carteirinha (limite de 5MB por arquivo, aceitamos JPG, PNG e PDF).
-          </p>
+              {formData.parentesco === 'Autorização Judicial' && (
+                <div className="md:col-span-2 border-2 border-cyan-200 rounded-xl p-4 bg-cyan-50/30">
+                  <UploadDocsMenor id="documento_autorizacao_legal" label="Autorização Judicial / Guarda *" descricao="Obrigatório para este tipo de parentesco" file={documentos.documento_autorizacao_legal} handleFileChange={handleFileChange} clearFile={clearFile} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </div>
 
-      <div className="pt-8 border-t border-slate-100 flex justify-end gap-4">
-        <Button type="button" variant="outline" onClick={() => navigate('/painel')} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">
-          Cancelar
-        </Button>
-        <Button type="submit" disabled={isSubmitting} className="h-12 px-8 rounded-xl font-bold bg-cyan-600 hover:bg-cyan-700 text-white shadow-lg shadow-cyan-200 transition-all uppercase tracking-wider text-sm">
-          {isSubmitting ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Enviando Solicitação...</> : "Enviar para Análise"}
-        </Button>
-      </div>
-    </form>
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-start gap-3">
+          <Loader2 className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold text-blue-900">Processamento Seguro de Arquivos</h4>
+            <p className="text-xs text-blue-800 leading-relaxed">
+              Ao enviar para análise, seus arquivos serão convertidos e otimizados automaticamente antes de serem enviados aos nossos servidores. Este processo ocorre no seu dispositivo para economizar dados e garantir que as fotos mantenham a qualidade necessária para a confecção da carteirinha (limite de 5MB por arquivo, aceitamos JPG, PNG e PDF).
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-8 border-t border-slate-100 flex justify-end gap-4">
+          <Button type="button" variant="outline" onClick={() => navigate('/painel')} className="h-12 px-6 rounded-xl font-bold border-slate-200 text-slate-600 hover:bg-slate-50">
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={isSubmitting} className="h-12 px-8 rounded-xl font-bold bg-cyan-600 hover:bg-cyan-700 text-white shadow-lg shadow-cyan-200 transition-all uppercase tracking-wider text-sm">
+            {isSubmitting ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Enviando Solicitação...</> : "Enviar para Análise"}
+          </Button>
+        </div>
+      </form>
     </>
   );
 };

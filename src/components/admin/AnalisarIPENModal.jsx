@@ -196,8 +196,12 @@ const AnalisarIPENModal = ({ onComplete, mesesDisponiveis = [] }) => {
       const visitanteRaw = (row.visitante || '').trim();
       if (!visitanteRaw) continue;
 
+      // Extrai o ID numérico (prontuário) do início do visitante
+      const prontMatch = visitanteRaw.match(/^(\d+)/);
+      const prontuarioVisitante = prontMatch ? prontMatch[1] : null;
+
       // Remove ID numérico do início do nome do visitante (ex: "63557 FULANA DE TAL")
-      const nomeVisitante = visitanteRaw.replace(/^\d{4,8}\s+/, '').replace(/\s+/g, ' ').trim().toUpperCase();
+      const nomeVisitante = visitanteRaw.replace(/^\d+\s+/, '').replace(/\s+/g, ' ').trim().toUpperCase();
       if (!nomeVisitante || nomeVisitante.length < 4) continue;
 
       const vinculo = (row.vinculo || 'Não Identificado').replace(/\s+/g, ' ').trim();
@@ -209,6 +213,7 @@ const AnalisarIPENModal = ({ onComplete, mesesDisponiveis = [] }) => {
         nome_visitante_normalizado: norm(nomeVisitante),
         vinculo,
         periodo_ref:                mesRef,
+        prontuario_visitante:       prontuarioVisitante,
       });
     }
 
@@ -268,7 +273,7 @@ const AnalisarIPENModal = ({ onComplete, mesesDisponiveis = [] }) => {
       console.log(`[AnalisarIPENModal] ${registrosRaw.length} originais -> ${registros.length} deduplicados`);
 
       // 4. Upsert em lotes (mantém histórico, atualiza vínculos desatualizados)
-      //    Conflito em (matricula_preso, nome_visitante_normalizado) → atualiza vínculo e periodo_ref
+      //    Conflito em (matricula_preso, nome_visitante_normalizado, periodo_ref) → atualiza vínculo
       const batchSize = 500;
       let upsertados = 0;
       for (let i = 0; i < registros.length; i += batchSize) {
@@ -276,7 +281,7 @@ const AnalisarIPENModal = ({ onComplete, mesesDisponiveis = [] }) => {
         const { error } = await supabase
           .from('vinculos_ipen')
           .upsert(batch, {
-            onConflict: 'matricula_preso,nome_visitante_normalizado',
+            onConflict: 'matricula_preso,nome_visitante_normalizado,periodo_ref',
             ignoreDuplicates: false,
           });
         if (error) throw error;

@@ -11,6 +11,7 @@ import { verificarCarteirinhaStatus, cancelarAgendamentoVisitante } from '@/serv
 
 import FAQAccordion from '@/components/visitante/FAQAccordion';
 import AdicionarVinculoModal from '@/components/visitante/AdicionarVinculoModal';
+import AlterarParentescoModal from '@/components/visitante/AlterarParentescoModal';
 
 // Novos componentes importados
 import DashboardHeader from './visitante/dashboard/components/DashboardHeader';
@@ -45,7 +46,9 @@ const VisitanteDashboard = () => {
   const [masterCard, setMasterCard] = useState(null);
   const [vinculos, setVinculos] = useState([]);
   const [menores, setMenores] = useState([]);
+  const [solicitacaoParentesco, setSolicitacaoParentesco] = useState(null);
   const [showVinculoModal, setShowVinculoModal] = useState(false);
+  const [showAlterarParentescoModal, setShowAlterarParentescoModal] = useState(false);
 
   const [infoModalType, setInfoModalType] = useState(null);
 
@@ -74,12 +77,15 @@ const VisitanteDashboard = () => {
           .order('created_at', { ascending: false });
 
         if (!error && data) {
-          const master = data.find(c => !c.protocolo?.startsWith('VIN-') && !c.protocolo?.startsWith('MEN-') && !c.menor_idade);
+          const master = data.find(c => !c.protocolo?.startsWith('VIN-') && !c.protocolo?.startsWith('MEN-') && !c.protocolo?.startsWith('PAR-') && !c.menor_idade);
           const others = data.filter(c => c.protocolo?.startsWith('VIN-'));
           const minors = data.filter(c => c.protocolo?.startsWith('MEN-') || c.menor_idade);
+          const parReq = data.find(c => c.protocolo?.startsWith('PAR-'));
+          
           setMasterCard(master);
           setVinculos(others);
           setMenores(minors);
+          setSolicitacaoParentesco(parReq);
         }
       } catch (err) {
         console.error("Erro ao buscar carteirinhas:", err);
@@ -224,6 +230,8 @@ const VisitanteDashboard = () => {
                 menores={menores}
                 vinculos={vinculos}
                 setShowVinculoModal={setShowVinculoModal}
+                onAlterarParentesco={() => setShowAlterarParentescoModal(true)}
+                solicitacaoParentesco={solicitacaoParentesco}
               />
             </TabsContent>
 
@@ -279,6 +287,15 @@ const VisitanteDashboard = () => {
           onClose={() => setShowVinculoModal(false)}
           user={user}
           profile={profile}
+          onSucesso={() => setRefreshTrigger(prev => prev + 1)}
+        />
+
+        <AlterarParentescoModal
+          isOpen={showAlterarParentescoModal}
+          onClose={() => setShowAlterarParentescoModal(false)}
+          user={user}
+          profile={profile}
+          masterCard={masterCard}
           onSucesso={() => setRefreshTrigger(prev => prev + 1)}
         />
       </div>

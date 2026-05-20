@@ -12,12 +12,10 @@ import {
 } from '@/components/ui/dialog';
 import { Loader2, FileUp, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-// Este arquivo importa presos para que a aba agendamentos e carteriinhas possam levar ao admin a certeza que as matriculas
-// digitadas pelos visitantes realmente são validas
-// Configuração do Worker do PDF.js (CDN para evitar problemas de build locais)
+// Importa relatório 2.13 para extrair o comportamento dos internos (Bom, Ruim, Regular, etc.)
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
 
-const ImportarPresosPDF = ({ onComplete }) => {
+const ImportarIPEN213 = ({ onComplete }) => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [stats, setStats] = useState(null);
@@ -75,72 +73,33 @@ const ImportarPresosPDF = ({ onComplete }) => {
   };
 
   const parsearTexto = (texto) => {
-    // Portabilidade da lógica do Apps Script
     let bruto = String(texto || '');
-
-    // Normalização básica de quebras de linha
-    bruto = bruto.replace(/(GAL:\s*[A-Z])/g, '\n$1');
-    bruto = bruto.replace(/(^|[^\d])(\d{6}\s+)/g, (match, p1, p2) => p1 + '\n' + p2);
 
     const linhas = bruto.split('\n')
       .map(l => l.trim())
       .filter(Boolean);
 
     const registros = [];
-    let galeriaAtual = '';
 
-    const ehLinhaAdministrativa = (l) => [
-      /^ESTADO DE/i, /^SECRETARIA DE/i, /^POLICIA PENAL/i, /^SISTEMA DE/i,
-      /^UNIDADE:/i, /^PRONTUARIOS/i, /^IMPRESSO EM/i, /^TOTAL /i, /^i-PEN/i
-    ].some(rx => rx.test(l));
-
-    const temCaraDeOcorrencia = (l) => {
-      if (/[()|:/]/.test(l) && !l.includes('GAL:')) return true;
-      if (/\d{2}\/\d{2}\/\d{4}/.test(l)) return true;
-      return /\b(CONSULTA|SAIDA|TRABALHO|PUNICAO|PARLATORIO|PRIMEIRA|FASE)\b/i.test(l);
-    };
-
+    // Relatório 2.13 - Regime Atual:
+    // Exemplo com comportamento: "822082 ACLEBISON SANTOS SANTANA ... 17/12/1985 Bom A:M|G:B|..."
+    // Exemplo sem comportamento: "886640 ADEMAR DE SOUZA ... 15/11/1978 A:M|G:A|..."
+    // A chave é: após a data de nasc. (DD/MM/YYYY), pode vir opcionalmente o comportamento antes do código "A:M|"
     for (let i = 0; i < linhas.length; i++) {
       const linha = linhas[i];
 
-      // Detecta Galeria
-      const matchGal = linha.match(/GAL:\s*([A-Z])/i);
-      if (matchGal) {
-        galeriaAtual = matchGal[1].toUpperCase();
-        continue;
-      }
+      // Extrai matrícula e data de nascimento
+      const matchBase = linha.match(/^(\d{6})\s+.+?(\d{2}\/\d{2}\/\d{4})\s+(Bom|Ruim|Regular|Ótimo|Péssimo|Excelente|Muito Bom)?\s*A:/i);
 
-      // Detecta Detento (Matrícula 6 dígitos + Nome)
-      const matchPreso = linha.match(/^(\d{6})\s+(.+)$/);
-      if (matchPreso && galeriaAtual) {
-        const matricula = matchPreso[1];
-        let nome = matchPreso[2];
+      if (matchBase) {
+        const matricula = matchBase[1];
+        // Comportamento: capturado se presente, null caso contrário (será tratado como BOM no frontend)
+        const comportamento = matchBase[3] ? matchBase[3].trim() : null;
 
-        // Tenta capturar continuação do nome em linhas seguintes
-        while (i + 1 < linhas.length) {
-          const prox = linhas[i + 1];
-          if (/^GAL:\s*[A-Z]/i.test(prox) || /^\d{6}\s+/.test(prox) ||
-            ehLinhaAdministrativa(prox) || temCaraDeOcorrencia(prox)) break;
-
-          nome += ' ' + prox;
-          i++;
-        }
-
-        // Limpeza do nome
-        nome = nome
-          .replace(/\s+(CONSULTA|SAIDA|TRABALHO|PUNICAO|PARLATORIO|PRIMEIRA)\b.*$/i, '')
-          .replace(/[^A-ZÀ-ÚÇ' -]/gi, ' ')
-          .replace(/\s+/g, ' ')
-          .trim()
-          .toUpperCase();
-
-        if (nome && nome.length > 3) {
-          registros.push({
-            matricula,
-            nome,
-            galeria: galeriaAtual
-          });
-        }
+        registros.push({
+          matricula,
+          comportamento
+        });
       }
     }
 
@@ -159,14 +118,14 @@ const ImportarPresosPDF = ({ onComplete }) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="flex items-center gap-2 border-dashed border-gray-400 hover:border-blue-500 hover:text-blue-600 transition-all">
+        <Button variant="outline" className="flex items-center gap-2 border-dashed border-orange-400 hover:border-orange-600 hover:text-orange-700 transition-all">
           <FileUp size={16} />
-          1.5 - Sincronizar PDF (IPEN)
+          Sincronizar PDF (2.13)
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md bg-white">
         <DialogHeader>
-          <DialogTitle>Sincronizar Base de Internos</DialogTitle>
+          <DialogTitle>Sincronizar Relatório 2.13 (Comportamento)</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50/50">
           {loading ? (
@@ -189,16 +148,16 @@ const ImportarPresosPDF = ({ onComplete }) => {
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-medium text-gray-900">Selecione o Relatório PDF</p>
-                <p className="text-xs text-gray-500">O sistema processará matrículas, nomes e galerias automaticamente.</p>
+                <p className="text-xs text-gray-500">O sistema extrairá o comportamento de cada interno e atualizará a base automáticamente.</p>
               </div>
               <input
                 type="file"
                 accept=".pdf"
                 className="hidden"
-                id="pdf-upload"
+                id="pdf-upload-213"
                 onChange={handleFileUpload}
               />
-              <label htmlFor="pdf-upload">
+              <label htmlFor="pdf-upload-213">
                 <Button asChild variant="default" className="bg-[#2D5016] hover:bg-[#1a310d]">
                   <span className="cursor-pointer">Escolher Arquivo</span>
                 </Button>
@@ -222,4 +181,4 @@ const ImportarPresosPDF = ({ onComplete }) => {
   );
 };
 
-export default ImportarPresosPDF;
+export default ImportarIPEN213;

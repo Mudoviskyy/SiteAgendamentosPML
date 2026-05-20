@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Clock, User, History, CheckCircle, Plus, Mail } from 'lucide-react';
+import { Clock, User, History, CheckCircle, Plus, Mail, Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { format, isValid, parseISO } from 'date-fns';
 import CarteirinhaDisplay from '@/components/visitante/CarteirinhaDisplay';
@@ -79,8 +79,16 @@ const CarteirinhasTab = ({
   setShowRequisitosModal,
   menores,
   vinculos,
-  setShowVinculoModal
+  setShowVinculoModal,
+  onAlterarParentesco,
+  solicitacaoParentesco
 }) => {
+  const isMasterAmigo = masterCard?.status === 'aprovado' &&
+    masterCard?.parentesco?.toLowerCase() === 'amigo(a)';
+
+  const isParPendente = solicitacaoParentesco?.status === 'pendente';
+  const isParRecusado = solicitacaoParentesco?.status === 'recusado' || solicitacaoParentesco?.status === 'cancelado';
+
   return (
     <div className="space-y-8 animate-in fade-in-50">
       {/* SEÇÃO CARTEIRINHA PRINCIPAL */}
@@ -103,8 +111,71 @@ const CarteirinhasTab = ({
                 </div>
               </div>
             )}
-            <div className="shrink-0">
+            <div className="shrink-0 flex flex-col items-center">
               <CarteirinhaDisplay data={masterCard} />
+              
+              {/* Botão de Alteração de Parentesco - visível apenas para amigo(a) aprovado */}
+              {isMasterAmigo && (
+                <div className="mt-6 w-full max-w-[300px] space-y-3">
+                  <button
+                    onClick={onAlterarParentesco}
+                    disabled={isParPendente}
+                    className={`w-full group flex items-center justify-center gap-2 px-5 py-3 bg-white border-2 font-black text-[10px] uppercase tracking-widest rounded-xl shadow-sm transition-all duration-200
+                      ${isParPendente 
+                        ? 'border-amber-200 text-amber-600 bg-amber-50/50 cursor-not-allowed' 
+                        : 'border-rose-300 hover:border-rose-500 hover:bg-rose-50 text-rose-600 hover:text-rose-700'
+                      }`}
+                  >
+                    {isParPendente ? (
+                      <Clock className="w-3.5 h-3.5 animate-pulse" />
+                    ) : (
+                      <Heart className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                    )}
+                    {isParPendente ? 'Alteração em Análise' : 'Atualizar Parentesco'}
+                  </button>
+
+                  {/* Feedback da Solicitação PAR- */}
+                  {solicitacaoParentesco && (
+                    <div className={`p-4 rounded-xl border text-center animate-in fade-in slide-in-from-top-2
+                      ${isParPendente ? 'bg-amber-50 border-amber-100' : 
+                        isParRecusado ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}
+                    >
+                      <div className="flex items-center justify-center gap-2 mb-1">
+                        {isParPendente ? (
+                          <Badge className="bg-amber-100 text-amber-700 border-none text-[9px] font-black">PENDENTE</Badge>
+                        ) : isParRecusado ? (
+                          <Badge className="bg-red-100 text-red-700 border-none text-[9px] font-black">
+                            {solicitacaoParentesco.status.toUpperCase()}
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-slate-100 text-slate-700 border-none text-[9px] font-black">
+                            {solicitacaoParentesco.status.toUpperCase()}
+                          </Badge>
+                        )}
+                        <span className="text-[9px] font-mono font-bold text-slate-400">{solicitacaoParentesco.protocolo}</span>
+                      </div>
+
+                      {isParRecusado && solicitacaoParentesco.motivo_cancelamento && (
+                        <p className="text-[11px] text-red-800 font-bold leading-tight mt-2">
+                          Motivo: {solicitacaoParentesco.motivo_cancelamento}
+                        </p>
+                      )}
+                      
+                      {isParPendente && (
+                        <p className="text-[10px] text-amber-700 font-bold leading-tight">
+                          Sua solicitação de mudança para {solicitacaoParentesco.parentesco_solicitado} está sendo analisada.
+                        </p>
+                      )}
+
+                      {!isParPendente && !isParRecusado && solicitacaoParentesco.status === 'aprovado' && (
+                        <p className="text-[10px] text-green-700 font-bold leading-tight">
+                          Solicitação aprovada! Seu parentesco foi atualizado.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

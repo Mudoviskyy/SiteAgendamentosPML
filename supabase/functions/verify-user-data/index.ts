@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
 const corsHeaders = {
@@ -7,13 +7,14 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
-// Configuração do Rate Limit via Deno KV
-// Usamos uma API nativa do Deno Deploy (Edge Functions) para armazenar os hits.
-const kv = await Deno.openKv();
+// Configuração do Rate Limit em memória (best effort)
+// Como Deno KV não é suportado nas Edge Functions do Supabase e causa falha de boot (CORS 500),
+// usamos um Map em memória para evitar crashes, com mecanismo simples de limpeza.
+const rateLimitMap = new Map<string, { count: number; start: number }>();
 const WINDOW_MS = 60000; // 1 minuto
-const MAX_REQUESTS = 10; // Max 10 consultas por minuto por IP
+const MAX_REQUESTS = 15; // Max 15 consultas por minuto por IP
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   // CORS pré-flight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -22,25 +23,34 @@ serve(async (req) => {
   try {
     const ip = req.headers.get("x-forwarded-for") || "unknown";
     
-    // Rate Limiting Logic
-    const rlKey = ["rate_limit", ip];
-    const res = await kv.get(rlKey);
-    let current = res.value as { count: number, start: number } | null;
+    // Rate Limiting Logic (Best Effort em Memória)
     const now = Date.now();
+    let current = rateLimitMap.get(ip);
 
     if (!current || now - current.start > WINDOW_MS) {
       current = { count: 1, start: now };
     } else {
       current.count++;
-      if (current.count > MAX_REQUESTS) {
-        console.warn(`Rate limit atingido pelo IP: ${ip}`);
-        return new Response(JSON.stringify({ error: "Muitas requisições. Tente novamente mais tarde." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
+    }
+    
+    rateLimitMap.set(ip, current);
+
+    if (current.count > MAX_REQUESTS) {
+      console.warn(`Rate limit atingido pelo IP: ${ip}`);
+      return new Response(JSON.stringify({ error: "Muitas requisições. Tente novamente mais tarde." }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Limpeza periódica do Map para evitar consumo excessivo de memória
+    if (rateLimitMap.size > 500) {
+      for (const [key, value] of rateLimitMap.entries()) {
+        if (now - value.start > WINDOW_MS) {
+          rateLimitMap.delete(key);
+        }
       }
     }
-    await kv.set(rlKey, current, { expireIn: WINDOW_MS });
 
     const { type, value } = await req.json();
 

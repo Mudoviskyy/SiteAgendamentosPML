@@ -58,5 +58,18 @@ visitas realizadas top 1000.pdf
 *.csv
 *.xlsx
 *.xls
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.gif
+*.svg
+
+# Temporary / Scratch files
+parse.mjs
+regex_test.js
+
+# Ignored Folders
 src/components/admin/relacao preso/
 supabase/.temp/
+

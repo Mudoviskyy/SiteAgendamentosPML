@@ -61,6 +61,29 @@ const AgendamentoForm = () => {
     }
 
     try {
+      const { verificarCarteirinhaStatus } = await import('@/services/agendamentosService');
+      const status = await verificarCarteirinhaStatus(user.id);
+      
+      if (!status.ativa) {
+        toast({ title: "Sua carteirinha não está ativa", variant: "destructive" });
+        return;
+      }
+
+      if (status.validade && selectedSlot?.data_visita) {
+        const dataVisita = new Date(`${selectedSlot.data_visita}T00:00:00`);
+        const dataValidade = new Date(status.validade);
+        dataValidade.setHours(0, 0, 0, 0);
+
+        if (dataVisita > dataValidade) {
+          toast({ 
+            title: "Data posterior ao vencimento", 
+            description: `Sua carteirinha vence em ${dataValidade.toLocaleDateString('pt-BR')}.`,
+            variant: "destructive" 
+          });
+          return;
+        }
+      }
+
       await createAgendamento({
         vaga_configuracao_id: selectedSlot.id,
         id_visitante: user.id,

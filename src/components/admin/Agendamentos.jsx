@@ -11,8 +11,13 @@ import { supabase } from '@/lib/supabase';
 import { addLog, measurePerf } from '@/utils/logger'; // ✅ Importando logger
 import { Search, Loader2, CheckCircle, XCircle, AlertTriangle, Calendar, ChevronLeft, ChevronRight, Info, History, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { format, parseISO, differenceInCalendarDays } from 'date-fns';
+import { format, parseISO, differenceInCalendarDays, differenceInMonths } from 'date-fns';
+import { desfazerCancelamentoAgendamento } from '@/services/agendamentosService';
 import ImportarPresosPDF from './ImportarPresosPDF';
+import ImportarIPEN19 from './ImportarIPEN19';
+import ImportarIPEN213 from './ImportarIPEN213';
+import { useSincronizacaoDiaria } from '@/hooks/useSincronizacaoDiaria';
+import SincronizacaoDiariaModal from './SincronizacaoDiariaModal';
 
 const gerarMesesAnos = () => {
   const opcoes = [];
@@ -32,6 +37,7 @@ const gerarMesesAnos = () => {
 const opcoesMesesAnos = gerarMesesAnos();
 
 const AgendamentosAdmin = () => {
+  const { sincronizado, loading: syncLoading, marcarConcluido } = useSincronizacaoDiaria();
   const [agendamentos, setAgendamentos] = useState([]);
   const [mapaMensal, setMapaMensal] = useState({});
   const [loading, setLoading] = useState(true);
@@ -50,6 +56,13 @@ const AgendamentosAdmin = () => {
 
   const [validacaoPreso, setValidacaoPreso] = useState({ loading: false, data: null });
   const [alertasVisitante, setAlertasVisitante] = useState({ loading: false, data: null });
+
+  // --- CORREÇÃO DE MATRÍCULA/NOME PELO ADMIN ---
+  const [editMatriculaMode, setEditMatriculaMode] = useState(false);
+  const [novaMatricula, setNovaMatricula] = useState('');
+  const [novoNome, setNovoNome] = useState('');
+  const [sugestaoNome, setSugestaoNome] = useState({ loading: false, data: null });
+  const [savingCorrecao, setSavingCorrecao] = useState(false);
 
   // Paginação 
   const [page, setPage] = useState(0);
@@ -287,6 +300,133 @@ const AgendamentosAdmin = () => {
     checkValidacao();
   }, [detailsModal.isOpen, detailsModal.data]);
 
+  // --- BUSCA POR NOME NA BASE PDF (quando matrícula não encontrada) ---
+  useEffect(() => {
+    const buscarPorNome = async () => {
+      if (
+        detailsModal.isOpen &&
+        detailsModal.data?.nome_preso &&
+        !validacaoPreso.loading &&
+        !validacaoPreso.data  // só busca por nome se matrícula não achou resultado
+      ) {
+        setSugestaoNome({ loading: true, data: null });
+        try {
+          const { data } = await supabase
+            .from('base_pdf')
+            .select('*');
+
+          const nomeAgendNorm = normalizeCheck(detailsModal.data.nome_preso);
+          // Tenta match exato normalizado primeiro
+          let match = (data || []).find(d => normalizeCheck(d.nome) === nomeAgendNorm);
+          // Se não, tenta match parcial (nome do agendamento contido no nome da base)
+          if (!match) {
+            match = (data || []).find(d => {
+              const baseNorm = normalizeCheck(d.nome);
+              return baseNorm.includes(nomeAgendNorm) || nomeAgendNorm.includes(baseNorm);
+            });
+          }
+          setSugestaoNome({ loading: false, data: match || null });
+        } catch {
+          setSugestaoNome({ loading: false, data: null });
+        }
+      } else if (!detailsModal.isOpen) {
+        setSugestaoNome({ loading: false, data: null });
+      }
+    };
+    buscarPorNome();
+  }, [detailsModal.isOpen, validacaoPreso.loading, validacaoPreso.data, detailsModal.data]);
+
+  // Reseta o modo de edição ao fechar o modal
+  useEffect(() => {
+    if (!detailsModal.isOpen) {
+      setEditMatriculaMode(false);
+      setNovaMatricula('');
+      setNovoNome('');
+    }
+  }, [detailsModal.isOpen]);
+
+  // --- SALVAR CORREÇÃO DE MATRÍCULA/NOME ---
+  const salvarCorrecaoMatricula = async () => {
+    if (!detailsModal.data?.id) return;
+    setSavingCorrecao(true);
+    try {
+      const updates = {};
+      const matLimpa = novaMatricula.replace(/\D/g, '').slice(0, 6);
+      const nomeFinal = novoNome.trim();
+
+      if (matLimpa && matLimpa !== detailsModal.data.matricula_preso) {
+        updates.matricula_preso = matLimpa;
+      }
+      if (nomeFinal && nomeFinal !== detailsModal.data.nome_preso) {
+        updates.nome_preso = nomeFinal;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        toast({ title: 'Nenhuma alteração', description: 'Os valores são iguais ao atual.', className: 'bg-gray-700 text-white' });
+        setSavingCorrecao(false);
+        return;
+      }
+
+      if (updates.matricula_preso && !/^\d{6}$/.test(updates.matricula_preso)) {
+        toast({ title: 'Matrícula inválida', description: 'A matrícula deve ter exatamente 6 dígitos.', className: 'bg-red-500 text-white' });
+        setSavingCorrecao(false);
+        return;
+      }
+
+      // 1. Atualiza o agendamento
+      const { error: errAgend } = await supabase
+        .from('agendamentos')
+        .update(updates)
+        .eq('id', detailsModal.data.id);
+      if (errAgend) throw errAgend;
+
+      // 2. Atualiza carteirinhas vinculadas ao visitante
+      if (detailsModal.data.id_visitante) {
+        const cartUpdates = {};
+        if (updates.matricula_preso) cartUpdates.matricula_preso = updates.matricula_preso;
+        if (updates.nome_preso) cartUpdates.nome_apenado = updates.nome_preso;
+
+        if (Object.keys(cartUpdates).length > 0) {
+          // Busca carteirinhas do visitante que correspondem ao nome/matrícula atual
+          const { data: carts } = await supabase
+            .from('carteirinhas')
+            .select('id')
+            .eq('usuario_id', detailsModal.data.id_visitante)
+            .eq('nome_apenado', detailsModal.data.nome_preso);
+
+          if (carts && carts.length > 0) {
+            await supabase
+              .from('carteirinhas')
+              .update(cartUpdates)
+              .in('id', carts.map(c => c.id));
+          }
+        }
+      }
+
+      addLog('ADMIN_CORRECAO_MATRICULA', { agendamento_id: detailsModal.data.id, updates }, 'SUCCESS');
+
+      toast({
+        title: '✅ Correção salva!',
+        description: `Dados corrigidos no agendamento${detailsModal.data.id_visitante ? ' e na carteirinha do visitante' : ''}.`,
+        className: 'bg-[#2D5016] text-white border-none'
+      });
+
+      // Atualiza o modal localmente
+      setDetailsModal(prev => ({
+        ...prev,
+        data: { ...prev.data, ...updates }
+      }));
+      setEditMatriculaMode(false);
+      setNovaMatricula('');
+      setNovoNome('');
+      fetchAgendamentos();
+    } catch (err) {
+      toast({ title: 'Erro ao salvar', description: err.message, className: 'bg-red-500 text-white' });
+    } finally {
+      setSavingCorrecao(false);
+    }
+  };
+
   // --- ALERTAS DO VISITANTE (MÚLTIPLAS FALTAS / CRUZADOS) ---
   useEffect(() => {
     const checkAlertas = async () => {
@@ -343,6 +483,28 @@ const AgendamentosAdmin = () => {
     setActionLoading(false);
   };
 
+  const handleDesfazerCancelamento = async (agendamento) => {
+    setActionLoading(true);
+    try {
+      await desfazerCancelamentoAgendamento(agendamento.id);
+      toast({
+        title: 'Cancelamento desfeito com sucesso.',
+        description: 'O agendamento retornou para a situação Pendente.',
+        className: 'bg-[#2D5016] text-white border-none'
+      });
+      fetchAgendamentos();
+      fetchControleMensal();
+    } catch (error) {
+      toast({
+        title: 'Não foi possível desfazer o cancelamento.',
+        description: error.message || 'Erro desconhecido',
+        className: 'bg-red-500 text-white'
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const formatarTelefone = (tel) => {
     if (!tel) return "Não informado";
     const limpo = String(tel).replace(/\D/g, "");
@@ -357,8 +519,13 @@ const AgendamentosAdmin = () => {
     return limpo.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
   };
 
+  if (syncLoading) {
+    return <div className="flex h-screen items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-blue-500 w-12 h-12" /></div>;
+  }
+
   return (
     <div className="space-y-6">
+      {!sincronizado && <SincronizacaoDiariaModal open={true} onComplete={marcarConcluido} />}
       {/* Barra de Filtros Remodelada */}
       <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 space-y-6">
         {/* Linha Superior: Busca e Ordenação */}
@@ -391,12 +558,14 @@ const AgendamentosAdmin = () => {
         </div>
 
         {/* Linha Inferior: Controles de Filtro */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
-          <div className="space-y-1">
-            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Dia Específico</label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 pt-2 border-b border-gray-100 pb-6">
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-gray-400 uppercase ml-1 flex items-center gap-1">
+              <Calendar className="w-3 h-3" /> Dia Específico
+            </label>
             <Input
               type="date"
-              className="bg-white text-gray-900 border-gray-200 h-10 rounded-lg"
+              className="bg-white text-gray-900 border-gray-200 h-10 rounded-lg focus:ring-2 focus:ring-green-500/20 transition-all"
               value={dataVisitaFiltro}
               onChange={(e) => {
                 setDataVisitaFiltro(e.target.value);
@@ -406,7 +575,7 @@ const AgendamentosAdmin = () => {
             />
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Mês/Ano</label>
             <Select value={mesVisitaFiltro || "todos"} onValueChange={(v) => {
               const val = v === "todos" ? "" : v;
@@ -428,7 +597,7 @@ const AgendamentosAdmin = () => {
             </Select>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Status</label>
             <Select value={statusFiltro} onValueChange={(v) => { setStatusFiltro(v); setPage(0); }}>
               <SelectTrigger className="bg-white text-gray-900 border-gray-200 h-10 rounded-lg"><SelectValue placeholder="Status" /></SelectTrigger>
@@ -452,7 +621,7 @@ const AgendamentosAdmin = () => {
             </Select>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Tipo</label>
             <Select value={tipoVisitaFiltro} onValueChange={(v) => { setTipoVisitaFiltro(v); setPage(0); }}>
               <SelectTrigger className="bg-white text-gray-900 border-gray-200 h-10 rounded-lg"><SelectValue placeholder="Tipo Visita" /></SelectTrigger>
@@ -464,7 +633,7 @@ const AgendamentosAdmin = () => {
             </Select>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Galeria</label>
             <Select value={galeriaFiltro} onValueChange={(v) => { setGaleriaFiltro(v); setPage(0); }}>
               <SelectTrigger className="bg-white text-gray-900 border-gray-200 h-10 rounded-lg"><SelectValue placeholder="Galeria" /></SelectTrigger>
@@ -478,9 +647,24 @@ const AgendamentosAdmin = () => {
               </SelectContent>
             </Select>
           </div>
+        </div>
 
-          <div className="flex items-end">
+        {/* Linha de Sincronização Manual */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+          <div className="flex items-center gap-2">
+            <div className="bg-orange-100 p-1.5 rounded-lg">
+              <History className="w-4 h-4 text-orange-600" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-gray-700 uppercase tracking-tight">Sincronização Manual</p>
+              <p className="text-[10px] text-gray-500">Atualize dados específicos do IPEN se necessário</p>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-2">
             <ImportarPresosPDF onComplete={() => activeTab === 'agendamentos' ? fetchAgendamentos() : fetchFilas()} />
+            <ImportarIPEN19 onComplete={() => activeTab === 'agendamentos' ? fetchAgendamentos() : fetchFilas()} />
+            <ImportarIPEN213 onComplete={() => activeTab === 'agendamentos' ? fetchAgendamentos() : fetchFilas()} />
           </div>
         </div>
       </div>
@@ -691,6 +875,11 @@ const AgendamentosAdmin = () => {
                               <XCircle className="w-4 h-4 mr-1" /> Cancelar
                             </Button>
                           )}
+                          {item.status === 'cancelado' && (
+                            <Button size="sm" className="bg-black hover:bg-gray-800 text-white shadow-sm" disabled={actionLoading} onClick={() => handleDesfazerCancelamento(item)}>
+                              <History className="w-4 h-4 mr-1" /> Desfazer Cancelamento
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -830,6 +1019,152 @@ const AgendamentosAdmin = () => {
                   </div>
                   <p className="text-lg font-bold text-gray-900">{detailsModal.data.nome_preso}</p>
                   <p className="text-sm text-gray-600 font-mono">Matrícula: {detailsModal.data.matricula_preso}</p>
+                  
+                  {validacaoPreso.data && (
+                    <div className="flex flex-wrap gap-2 mt-1.5">
+                      {validacaoPreso.data.comportamento && (
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          ['RUIM', 'PESSIMO', 'REGULAR'].includes(validacaoPreso.data.comportamento.toUpperCase()) 
+                          ? 'bg-red-100 text-red-700 border-red-200' 
+                          : 'bg-blue-100 text-blue-700 border-blue-200'
+                        }`}>
+                          Comportamento: {validacaoPreso.data.comportamento}
+                        </span>
+                      )}
+                      {validacaoPreso.data.data_ingresso && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200">
+                          Ingresso: {format(new Date(validacaoPreso.data.data_ingresso), 'dd/MM/yyyy')}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Botão de correção de matrícula/nome */}
+                  {!editMatriculaMode && (
+                    <button
+                      onClick={() => {
+                        setNovaMatricula(detailsModal.data.matricula_preso || '');
+                        setNovoNome(detailsModal.data.nome_preso || '');
+                        setEditMatriculaMode(true);
+                      }}
+                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-all shadow-sm uppercase tracking-wide"
+                    >
+                      ✏️ Corrigir Matrícula / Nome
+                    </button>
+                  )}
+
+                  {/* Painel de correção */}
+                  {editMatriculaMode && (() => {
+                    // Caso 2: matrícula encontrada na base, mas nome diverge → sugerir correção do nome
+                    const caso2 = validacaoPreso.data && !validacaoPreso.data.conferido;
+                    // Caso 1: matrícula NÃO encontrada, mas buscamos por nome e encontramos matrícula
+                    const caso1 = !validacaoPreso.data && sugestaoNome.data;
+
+                    return (
+                      <div className="mt-3 p-4 bg-white border-2 border-indigo-300 rounded-xl shadow-lg space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] font-black uppercase text-indigo-700 tracking-wider">✏️ Painel de Correção (Admin)</p>
+                          <button onClick={() => setEditMatriculaMode(false)} className="text-gray-400 hover:text-gray-700 text-xs font-bold">✕ Fechar</button>
+                        </div>
+
+                        {/* Caso 2: Nome diverge, matrícula correta → sugerir troca de nome */}
+                        {caso2 && (
+                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                            <p className="text-[11px] font-bold text-amber-800 uppercase mb-1">💡 Sugestão automática — Nome divergente</p>
+                            <p className="text-xs text-amber-700">A matrícula <strong>{detailsModal.data.matricula_preso}</strong> está correta, mas o nome no i-PEN é diferente:</p>
+                            <p className="text-sm font-bold text-amber-900 mt-1 bg-amber-100 px-2 py-1 rounded">{validacaoPreso.data.nome}</p>
+                            <button
+                              onClick={() => {
+                                setNovoNome(validacaoPreso.data.nome);
+                                setNovaMatricula(detailsModal.data.matricula_preso);
+                              }}
+                              className="mt-2 text-[11px] font-bold px-3 py-1 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all"
+                            >
+                              ✔ Usar este nome
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Caso 1: Matrícula errada, nome correto → sugerir troca de matrícula */}
+                        {caso1 && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <p className="text-[11px] font-bold text-blue-800 uppercase mb-1">💡 Sugestão automática — Matrícula incorreta</p>
+                            <p className="text-xs text-blue-700">O nome <strong>{detailsModal.data.nome_preso}</strong> foi encontrado no i-PEN com outra matrícula:</p>
+                            <p className="text-sm font-bold text-blue-900 mt-1 bg-blue-100 px-2 py-1 rounded font-mono">{sugestaoNome.data.matricula} — {sugestaoNome.data.nome}</p>
+                            <button
+                              onClick={() => {
+                                setNovaMatricula(sugestaoNome.data.matricula);
+                                setNovoNome(sugestaoNome.data.nome);
+                              }}
+                              className="mt-2 text-[11px] font-bold px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
+                            >
+                              ✔ Usar esta matrícula
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Caso 3: sem sugestão automática */}
+                        {!caso1 && !caso2 && !sugestaoNome.loading && (
+                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                            <p className="text-[11px] font-bold text-gray-600 uppercase mb-1">⚠️ Sem correspondência automática</p>
+                            <p className="text-xs text-gray-500">Nenhum registro na base i-PEN bateu com este nome ou matrícula. Preencha manualmente abaixo.</p>
+                          </div>
+                        )}
+
+                        {sugestaoNome.loading && (
+                          <div className="flex items-center gap-2 text-xs text-gray-400 animate-pulse">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Verificando base i-PEN por nome...
+                          </div>
+                        )}
+
+                        {/* Campos de edição manual */}
+                        <div className="space-y-2 pt-1 border-t border-gray-100">
+                          <p className="text-[10px] font-black text-gray-500 uppercase">Editar manualmente:</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-600 uppercase">Matrícula (6 dígitos)</label>
+                              <Input
+                                placeholder="Ex: 123456"
+                                value={novaMatricula}
+                                inputMode="numeric"
+                                maxLength={6}
+                                onChange={(e) => setNovaMatricula(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                className="border-indigo-200 focus:border-indigo-500 text-gray-900 bg-white font-mono text-sm h-9"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] font-bold text-gray-600 uppercase">Nome do Apenado</label>
+                              <Input
+                                placeholder="Nome completo"
+                                value={novoNome}
+                                onChange={(e) => setNovoNome(e.target.value)}
+                                className="border-indigo-200 focus:border-indigo-500 text-gray-900 bg-white text-sm h-9"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            onClick={salvarCorrecaoMatricula}
+                            disabled={savingCorrecao || (!novaMatricula && !novoNome)}
+                            className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white h-9 text-xs font-bold"
+                          >
+                            {savingCorrecao ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : '💾 '}
+                            Salvar Correção
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => setEditMatriculaMode(false)}
+                            disabled={savingCorrecao}
+                            className="h-9 text-xs"
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {validacaoPreso.data?.galeria && detailsModal.data.vaga_galeria &&
                     validacaoPreso.data.galeria.trim().toUpperCase().replace('GALERIA ', '') !== detailsModal.data.vaga_galeria.trim().toUpperCase().replace('GALERIA ', '') && (
@@ -880,6 +1215,66 @@ const AgendamentosAdmin = () => {
                   )}
                 </div>
               </div>
+
+              {/* Alertas do Interno (Comportamento e Tempo de Unidade) */}
+              {validacaoPreso.data && (
+                <div className="flex flex-col gap-2">
+                  {(() => {
+                    const tipoModal = (detailsModal.data.vaga_tipo_visita || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const ehIntimaModal = tipoModal.includes('intima');
+                    const comp = validacaoPreso.data.comportamento;
+                    const dataIngresso = validacaoPreso.data.data_ingresso;
+                    
+                    const alerts = [];
+                    
+                    // Verificação de Comportamento
+                    if (comp) {
+                      const compRuim = ['RUIM', 'PESSIMO', 'REGULAR'].includes(comp.toUpperCase());
+                      if (compRuim) {
+                        alerts.push({
+                          type: 'error',
+                          title: 'Comportamento Inadequado',
+                          msg: `O interno possui comportamento "${comp}". Isso costuma impedir a aprovação de visitas, especialmente íntimas.`
+                        });
+                      }
+                    } else if (ehIntimaModal) {
+                      alerts.push({
+                        type: 'warning',
+                        title: 'Comportamento Não Sincronizado',
+                        msg: 'O comportamento deste interno ainda não foi sincronizado (Relatório 2.13). Verifique manualmente.'
+                      });
+                    }
+
+                    // Verificação de Tempo de Unidade (Data de Ingresso)
+                    if (dataIngresso) {
+                      const diasNaUnidade = differenceInCalendarDays(new Date(), new Date(dataIngresso));
+                      if (ehIntimaModal && diasNaUnidade < 60) {
+                        alerts.push({
+                          type: 'error',
+                          title: 'Tempo de Unidade Insuficiente',
+                          msg: `O interno ingressou em ${format(new Date(dataIngresso), 'dd/MM/yyyy')} (há ${diasNaUnidade} dias). Visitas íntimas exigem no mínimo 60 dias de permanência.`
+                        });
+                      }
+                    } else if (ehIntimaModal) {
+                      alerts.push({
+                        type: 'warning',
+                        title: 'Data de Ingresso Pendente',
+                        msg: 'A data de ingresso deste interno não foi sincronizada (Relatório 1.9). Verifique o tempo de permanência.'
+                      });
+                    }
+
+                    return alerts.map((alert, idx) => (
+                      <div key={idx} className={`${alert.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-800'} px-4 py-3 rounded-xl border flex items-start gap-3 shadow-sm`}>
+                        <AlertTriangle className={`w-5 h-5 ${alert.type === 'error' ? 'text-red-600' : 'text-amber-600'} shrink-0 mt-0.5`} />
+                        <div>
+                          <p className={`text-xs font-bold uppercase tracking-tight ${alert.type === 'error' ? 'text-red-700' : 'text-amber-700'}`}>{alert.title}</p>
+                          <p className="text-[11px] mt-0.5 font-medium">{alert.msg}</p>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              )}
 
               {/* Alertas do Visitante */}
               {!alertasVisitante.loading && alertasVisitante.data && (alertasVisitante.data.faltas_6m > 0 || alertasVisitante.data.internos_distintos_2m > 1) && (

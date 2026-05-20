@@ -26,6 +26,10 @@ const RelatoriosAdmin = () => {
   const [pieData, setPieData] = useState([]);
   const [rawData, setRawData] = useState([]);
   const [error, setError] = useState(null);
+
+  /** Normaliza texto: remove acentos, caixa alta, sem espaços extras */
+  const norm = (str) =>
+    (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
   
   const [advMetrics, setAdvMetrics] = useState(null);
   const [ipenStats, setIpenStats] = useState(null);
@@ -192,6 +196,7 @@ const RelatoriosAdmin = () => {
 
   const handleExportar = () => {
     if (rawData.length === 0) return;
+    setLoading(true);
 
     const limparTelefone = (numero) => {
       if (!numero) return "";
@@ -204,68 +209,97 @@ const RelatoriosAdmin = () => {
       if (!limpo.startsWith("55")) limpo = "55" + limpo;
       return `https://wa.me/${limpo}`;
     };
-
-    const dadosFormatados = rawData.map(item => {
-      const dataFormatada = item.data_visita ? item.data_visita.split('-').reverse().join('/') : "-";
-      const horario = item.horario || "-";
-      const telBruto = item.whatsapp || item.p_whatsapp || "";
-
-         const formatarTipoVisita = (tipo) => {
-          switch (tipo) {
-            case "social_presencial":
-              return "Social Presencial";
-            case "social_video":
-              return "Social por Vídeo";
-            case "intima":
-              return "Íntima";
-            default:
-              return tipo || "-";
-          }
-        };
-      
-      return {
-        "DATA E HORA": `${dataFormatada} ${horario}`,
-        "NOME DO INTERNO": item.nome_preso?.toUpperCase() || "-",
-        "GALERIA": item.galeria || "-",
-        "SALA": "", 
-        "VISITANTE PRINCIPAL": item.visitante1_nome?.toUpperCase() || "-",
-        "VISITANTE 2": item.visitante2_nome?.toUpperCase() || "",
-        "VISITANTE 3": item.visitante3_nome?.toUpperCase() || "",
-        "LINK WHATSAPP": montarLinkWhatsapp(telBruto),
-        "TELEFONE": telBruto,
-        "TIPO DE VISITA": formatarTipoVisita(item.tipo_visita)  
-      };
-    });
-
-    const worksheet = XLSX.utils.json_to_sheet(dadosFormatados);
-
-    dadosFormatados.forEach((item, i) => {
-      const cellAddress = XLSX.utils.encode_cell({ r: i + 1, c: 7 });
-      if (item["LINK WHATSAPP"] !== "") {
-        worksheet[cellAddress].l = { 
-          Target: item["LINK WHATSAPP"],
-          Tooltip: "Clique para abrir no WhatsApp"
-        };
-        worksheet[cellAddress].v = "Abrir WhatsApp"; 
-      }
-    });
-
-    const wscols = [
-      { wch: 20 }, { wch: 35 }, { wch: 10 }, { wch: 10 }, 
-      { wch: 35 }, { wch: 30 }, { wch: 30 }, { wch: 18 }, 
-      { wch: 15 }, { wch: 30 }
-    ];
-    worksheet["!cols"] = wscols;
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório de Visitas");
     
-    // ALTERAÇÃO: Nome do arquivo dinâmico
-    const nomeArquivo = tipoFiltro === 'mes' 
-      ? `Relatorio_Mensal_${mesSelecionado}.xlsx`
-      : `Relatorio_Diario_${dataSelecionada}.xlsx`;
+    // Busca prontuários do IPEN para os visitantes principais deste lote
+    const matriculas = [...new Set(rawData.map(item => item.matricula_preso))];
+    
+    supabase
+      .from('vinculos_ipen')
+      .select('matricula_preso, nome_visitante_normalizado, prontuario_visitante')
+      .in('matricula_preso', matriculas)
+      .then(({ data: vinculosData }) => {
+        // Mapa para busca rápida: "matricula_nomeNorm" -> prontuario
+        const prontuarioMap = new Map();
+        if (vinculosData) {
+          vinculosData.forEach(v => {
+            const key = `${v.matricula_preso}_${v.nome_visitante_normalizado}`;
+            prontuarioMap.set(key, v.prontuario_visitante);
+          });
+        }
 
-    XLSX.writeFile(workbook, nomeArquivo);
+        const dadosFormatados = rawData.map(item => {
+          const dataFormatada = item.data_visita ? item.data_visita.split('-').reverse().join('/') : "-";
+          const horario = item.horario || "-";
+          const telBruto = item.whatsapp || item.p_whatsapp || "";
+
+          const formatarTipoVisita = (tipo) => {
+            switch (tipo) {
+              case "social_presencial": return "Social Presencial";
+              case "social_video": return "Social por Vídeo";
+              case "intima": return "Íntima";
+              default: return tipo || "-";
+            }
+          };
+
+          // Tenta pegar o prontuário oficial (IPEN 8.13)
+          const nomeNorm = norm(item.visitante1_nome);
+          const keyLookup = `${item.matricula_preso}_${nomeNorm}`;
+          const prontuarioOficial = prontuarioMap.get(keyLookup);
+          
+          // Se não tiver no IPEN, usa o que o visitante preencheu no cadastro
+          const prontuarioExibir = prontuarioOficial || item.visitante1_carteirinha || "";
+          const visitanteComProntuario = prontuarioExibir 
+            ? `${item.visitante1_nome?.toUpperCase()} (${prontuarioExibir})`
+            : item.visitante1_nome?.toUpperCase() || "-";
+          
+          return {
+            "DATA E HORA": `${dataFormatada} ${horario}`,
+            "NOME DO INTERNO": item.nome_preso?.toUpperCase() || "-",
+            "GALERIA": item.galeria || "-",
+            "SALA": "", 
+            "VISITANTE PRINCIPAL": visitanteComProntuario,
+            "VISITANTE 2": item.visitante2_nome?.toUpperCase() || "",
+            "VISITANTE 3": item.visitante3_nome?.toUpperCase() || "",
+            "LINK WHATSAPP": montarLinkWhatsapp(telBruto),
+            "TELEFONE": telBruto,
+            "TIPO DE VISITA": formatarTipoVisita(item.tipo_visita)  
+          };
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(dadosFormatados);
+
+        dadosFormatados.forEach((item, i) => {
+          const cellAddress = XLSX.utils.encode_cell({ r: i + 1, c: 7 });
+          if (item["LINK WHATSAPP"] !== "") {
+            worksheet[cellAddress].l = { 
+              Target: item["LINK WHATSAPP"],
+              Tooltip: "Clique para abrir no WhatsApp"
+            };
+            worksheet[cellAddress].v = "Abrir WhatsApp"; 
+          }
+        });
+
+        const wscols = [
+          { wch: 20 }, { wch: 35 }, { wch: 10 }, { wch: 10 }, 
+          { wch: 45 }, { wch: 30 }, { wch: 30 }, { wch: 18 }, 
+          { wch: 15 }, { wch: 30 }
+        ];
+        worksheet["!cols"] = wscols;
+
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Relatório de Visitas");
+        
+        const nomeArquivo = tipoFiltro === 'mes' 
+          ? `Relatorio_Mensal_${mesSelecionado}.xlsx`
+          : `Relatorio_Diario_${dataSelecionada}.xlsx`;
+
+        XLSX.writeFile(workbook, nomeArquivo);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Erro ao exportar:', err);
+        setLoading(false);
+      });
   };
 
   return (

@@ -1,8 +1,18 @@
 import React from 'react';
-import { CheckCircle, Upload, XCircle } from 'lucide-react';
+import { CheckCircle, Upload, XCircle, AlertTriangle } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import imageCompression from 'browser-image-compression';
 import { useToast } from '@/components/ui/use-toast';
+
+// Verifica se o arquivo é realmente legível (detecta arquivos do Google Drive não baixados)
+const verificarArquivoAcessivel = (file) => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(true);
+    reader.onerror = () => resolve(false);
+    reader.readAsArrayBuffer(file.slice(0, 1024)); // Lê apenas os primeiros 1KB
+  });
+};
 
 // Comprime imagens antes do envio (PDFs são ignorados)
 export const comprimirArquivo = async (file) => {
@@ -28,7 +38,7 @@ export const comprimirArquivo = async (file) => {
 
   try {
     const compressedBlob = await imageCompression(file, options);
-    
+
     if (!compressedBlob || compressedBlob.size === 0) {
       console.warn("Compressão vazia. Usando original.");
       return file;
@@ -38,8 +48,8 @@ export const comprimirArquivo = async (file) => {
     if (compressedBlob instanceof File) {
       finalFile = compressedBlob;
     } else {
-      finalFile = new File([compressedBlob], file.name, { 
-        type: file.type || compressedBlob.type || 'image/jpeg' 
+      finalFile = new File([compressedBlob], file.name, {
+        type: file.type || compressedBlob.type || 'image/jpeg'
       });
     }
 
@@ -59,7 +69,7 @@ const UploadDocumentos = ({ doc, isRequired, documentosState, handleFileSelect, 
   const files = documentosState[doc.name];
   const hasFiles = files && files.length > 0;
 
-  const onFileChange = (e) => {
+  const onFileChange = async (e) => {
     const selectedFiles = Array.from(e.target.files);
 
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
@@ -104,6 +114,24 @@ const UploadDocumentos = ({ doc, isRequired, documentosState, handleFileSelect, 
         title: "PDF muito pesado",
         description: `PDFs acima de 3MB podem falhar no celular. Converta para JPG em ilovepdf.com antes de enviar.`,
         className: "bg-amber-500 text-white border-none"
+      });
+      e.target.value = "";
+      handleFileSelect({ target: { files: [] } }, doc.name);
+      return;
+    }
+
+    // Verifica se o arquivo é realmente legível (problema comum com Google Drive no celular)
+    const inacessiveis = [];
+    for (const f of selectedFiles) {
+      const acessivel = await verificarArquivoAcessivel(f);
+      if (!acessivel) inacessiveis.push(f.name);
+    }
+    if (inacessiveis.length > 0) {
+      toast({
+        title: "Arquivo inacessível",
+        description: `Não foi possível ler o arquivo "${inacessiveis[0]}". Se veio do Google Drive, baixe-o para o celular primeiro e selecione da galeria ou pasta de downloads.`,
+        className: "bg-red-500 text-white border-none",
+        duration: 8000,
       });
       e.target.value = "";
       handleFileSelect({ target: { files: [] } }, doc.name);
@@ -175,6 +203,13 @@ const UploadDocumentos = ({ doc, isRequired, documentosState, handleFileSelect, 
           </button>
         )}
       </label>
+      {/* Aviso sobre Google Drive */}
+      <div className="flex items-start gap-1.5 mt-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+        <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0 mt-0.5" />
+        <p className="text-[10px] text-amber-800 leading-tight">
+          <strong>Evite o Google Drive:</strong> baixe o arquivo no celular antes de enviar.
+        </p>
+      </div>
       {doc.name === "declaracao_residencia" && (
         <p className="text-[11px] text-gray-500 mt-1">
           Envie este documento apenas se o comprovante de residência não estiver em seu nome.

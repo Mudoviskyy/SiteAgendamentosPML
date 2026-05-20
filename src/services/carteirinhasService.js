@@ -218,16 +218,22 @@ export const carteirinhasService = {
       console.error('Erro ao criar carteirinha:', error);
 
       if (novaCarteirinha?.id) {
-        await supabase
+        const { error: deleteError } = await supabase
           .from('carteirinhas')
           .delete()
           .eq('id', novaCarteirinha.id);
+        if (deleteError) {
+          console.error('[Rollback] FALHA ao deletar carteirinha órfã (id:', novaCarteirinha.id, '):', deleteError);
+        }
       }
 
       if (arquivosEnviados.length > 0) {
-        await supabase.storage
+        const { error: removeError } = await supabase.storage
           .from("carteirinhas")
           .remove(arquivosEnviados);
+        if (removeError) {
+          console.error('[Rollback] FALHA ao remover arquivos do storage:', removeError);
+        }
       }
 
       throw error;
@@ -324,8 +330,14 @@ export const carteirinhasService = {
 
     } catch (error) {
       console.error('Erro ao adicionar vínculo:', error);
-      if (novaCarteirinha?.id) await supabase.from('carteirinhas').delete().eq('id', novaCarteirinha.id);
-      if (arquivosEnviados.length > 0) await supabase.storage.from("carteirinhas").remove(arquivosEnviados);
+      if (novaCarteirinha?.id) {
+        const { error: deleteError } = await supabase.from('carteirinhas').delete().eq('id', novaCarteirinha.id);
+        if (deleteError) console.error('[Rollback Vínculo] FALHA ao deletar registro órfão:', deleteError);
+      }
+      if (arquivosEnviados.length > 0) {
+        const { error: removeError } = await supabase.storage.from("carteirinhas").remove(arquivosEnviados);
+        if (removeError) console.error('[Rollback Vínculo] FALHA ao remover arquivos:', removeError);
+      }
       throw error;
     }
   },
@@ -369,6 +381,76 @@ export const carteirinhasService = {
       }
 
       if (status === 'aprovado') {
+        // Desativar com segurança carteirinhas ativas conflitantes antes de aprovar a nova
+        if (registro) {
+          if (registro.menor_idade) {
+            // Caso 1: Carteirinha de menor
+            if (registro.nome_menor) {
+              const { data: ativasMenor } = await supabase
+                .from('carteirinhas')
+                .select('id, protocolo')
+                .eq('usuario_id', registro.usuario_id)
+                .eq('menor_idade', true)
+                .eq('nome_menor', registro.nome_menor)
+                .eq('status', 'aprovado')
+                .neq('id', id);
+
+              if (ativasMenor && ativasMenor.length > 0) {
+                for (const ativa of ativasMenor) {
+                  await supabase
+                    .from('carteirinhas')
+                    .update({
+                      status: 'cancelado',
+                      motivo_cancelamento: `Substituída por renovação (protocolo ${registro.protocolo})`,
+                      validade: null,
+                      cancelado_por: 'Sistema (Renovação)',
+                      cancelado_em: new Date().toISOString(),
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('id', ativa.id);
+                }
+              }
+            }
+          } else if (!registro.protocolo?.startsWith('PAR-')) {
+            // Caso 2: Carteirinha padrão (adulto)
+            const { data: ativasPadrao } = await supabase
+              .from('carteirinhas')
+              .select('id, protocolo, matricula_preso')
+              .eq('usuario_id', registro.usuario_id)
+              .eq('menor_idade', false)
+              .eq('status', 'aprovado')
+              .not('protocolo', 'ilike', 'PAR-%')
+              .neq('id', id);
+
+            if (ativasPadrao && ativasPadrao.length > 0) {
+              const filtradas = ativasPadrao.filter(ativa => {
+                if (registro.matricula_preso && registro.matricula_preso !== 'PENDENTE') {
+                  return ativa.matricula_preso === registro.matricula_preso;
+                } else {
+                  return !ativa.matricula_preso || ativa.matricula_preso === 'PENDENTE';
+                }
+              });
+
+              for (const ativa of filtradas) {
+                // Cancelar definitivamente alterando a matrícula para evitar o gatilho de agendamentos
+                const matriculaDummy = `CANCELADA_${ativa.matricula_preso || 'SEM_MATRICULA'}`;
+                await supabase
+                  .from('carteirinhas')
+                  .update({
+                    status: 'cancelado',
+                    matricula_preso: matriculaDummy,
+                    motivo_cancelamento: `Substituída por renovação (protocolo ${registro.protocolo})`,
+                    validade: null,
+                    cancelado_por: 'Sistema (Renovação)',
+                    cancelado_em: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', ativa.id);
+              }
+            }
+          }
+        }
+
         let dataFinal;
         let validadeFinal;
 
@@ -581,8 +663,148 @@ export const carteirinhasService = {
       return { success: true, protocol: protocolo };
     } catch (error) {
       console.error('Erro ao criar carteirinha de menor:', error);
-      if (novaCarteirinha?.id) await supabase.from('carteirinhas').delete().eq('id', novaCarteirinha.id);
-      if (arquivosEnviados.length > 0) await supabase.storage.from("carteirinhas").remove(arquivosEnviados);
+      if (novaCarteirinha?.id) {
+        const { error: deleteError } = await supabase.from('carteirinhas').delete().eq('id', novaCarteirinha.id);
+        if (deleteError) console.error('[Rollback Menor] FALHA ao deletar registro órfão:', deleteError);
+      }
+      if (arquivosEnviados.length > 0) {
+        const { error: removeError } = await supabase.storage.from("carteirinhas").remove(arquivosEnviados);
+        if (removeError) console.error('[Rollback Menor] FALHA ao remover arquivos:', removeError);
+      }
+      throw error;
+    }
+  },
+
+  createSolicitacaoAlteracaoParentesco: async (dados, arquivo, usuarioId) => {
+    let novaCarteirinha = null;
+    let arquivoEnviado = null;
+
+    try {
+      // Verifica se já existe uma solicitação PAR- pendente para este usuário
+      const { data: existente } = await supabase
+        .from('carteirinhas')
+        .select('id, status')
+        .eq('usuario_id', usuarioId)
+        .like('protocolo', 'PAR-%')
+        .eq('status', 'pendente')
+        .maybeSingle();
+
+      if (existente) {
+        throw new Error('Você já possui uma solicitação de alteração de parentesco em análise. Aguarde a conclusão antes de enviar outra.');
+      }
+
+      const protocolo = `PAR-${Date.now().toString().slice(-6)}`;
+
+      const { data, error } = await supabase
+        .from('carteirinhas')
+        .insert({
+          usuario_id: usuarioId,
+          nome: dados.nome,
+          cpf: dados.cpf,
+          parentesco: dados.parentesco_atual,
+          parentesco_solicitado: dados.parentesco_solicitado,
+          nome_apenado: dados.nome_apenado,
+          telefone: dados.telefone,
+          tipo_identificacao: dados.tipo_identificacao || 'CPF',
+          tipo_telefone: dados.tipo_telefone || 'BR',
+          protocolo,
+          status: 'pendente',
+          matricula_preso: dados.matricula_preso || null,
+          possui_carteirinha: 'alteracao_parentesco',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      novaCarteirinha = data;
+
+      if (!arquivo || arquivo.size <= 0) {
+        throw new Error('O arquivo de certidão não foi processado. Tente novamente.');
+      }
+
+      const nomeLimpo = arquivo.name
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^\w.-]+/g, '_');
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const path = `${usuarioId}/${novaCarteirinha.id}/certidao_casamento-${Date.now()}-${randomSuffix}-${nomeLimpo}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('carteirinhas')
+        .upload(path, arquivo);
+
+      if (uploadError) throw uploadError;
+      arquivoEnviado = path;
+
+      const { error: insertError } = await supabase
+        .from('carteirinha_documentos')
+        .insert({
+          carteirinha_id: novaCarteirinha.id,
+          tipo_documento: 'certidao_casamento',
+          nome_arquivo: arquivo.name,
+          url: path
+        });
+
+      if (insertError) throw insertError;
+
+      return { success: true, protocol: protocolo };
+
+    } catch (error) {
+      console.error('Erro ao criar solicitação PAR-:', error);
+      if (novaCarteirinha?.id) {
+        await supabase.from('carteirinhas').delete().eq('id', novaCarteirinha.id);
+      }
+      if (arquivoEnviado) {
+        await supabase.storage.from('carteirinhas').remove([arquivoEnviado]);
+      }
+      throw error;
+    }
+  },
+
+  aprovarAlteracaoParentesco: async (parId, usuarioId, parentescoSolicitado) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Buscar a carteirinha mestre do usuário (não VIN-, não MEN-, não PAR-)
+      const { data: mestre, error: erroMestre } = await supabase
+        .from('carteirinhas')
+        .select('id, parentesco, data_emissao, validade, status')
+        .eq('usuario_id', usuarioId)
+        .not('protocolo', 'ilike', 'VIN-%')
+        .not('protocolo', 'ilike', 'MEN-%')
+        .not('protocolo', 'ilike', 'PAR-%')
+        .eq('status', 'aprovado')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (erroMestre) throw erroMestre;
+      if (!mestre) throw new Error('Carteirinha mestre do visitante não encontrada.');
+
+      // Atualizar APENAS o parentesco da carteirinha mestre, sem tocar em datas
+      const { error: erroUpdate } = await supabase
+        .from('carteirinhas')
+        .update({ parentesco: parentescoSolicitado })
+        .eq('id', mestre.id);
+
+      if (erroUpdate) throw erroUpdate;
+
+      // Marcar a solicitação PAR- como aprovada
+      const { error: erroPar } = await supabase
+        .from('carteirinhas')
+        .update({
+          status: 'aprovado',
+          analisado_por: user?.id,
+          analisado_em: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', parId);
+
+      if (erroPar) throw erroPar;
+
+      return { success: true };
+    } catch (error) {
+      console.error('Erro ao aprovar alteração de parentesco:', error);
       throw error;
     }
   },

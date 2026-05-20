@@ -17,7 +17,7 @@ import { useToast } from '@/components/ui/use-toast';
 // Configuração do Worker do PDF.js (CDN para evitar problemas de build locais)
 pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
 
-const ImportarPresosPDF = ({ onComplete }) => {
+const ImportarIPEN19 = ({ onComplete }) => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [stats, setStats] = useState(null);
@@ -75,70 +75,45 @@ const ImportarPresosPDF = ({ onComplete }) => {
   };
 
   const parsearTexto = (texto) => {
-    // Portabilidade da lógica do Apps Script
     let bruto = String(texto || '');
-
-    // Normalização básica de quebras de linha
-    bruto = bruto.replace(/(GAL:\s*[A-Z])/g, '\n$1');
-    bruto = bruto.replace(/(^|[^\d])(\d{6}\s+)/g, (match, p1, p2) => p1 + '\n' + p2);
 
     const linhas = bruto.split('\n')
       .map(l => l.trim())
       .filter(Boolean);
 
     const registros = [];
-    let galeriaAtual = '';
 
-    const ehLinhaAdministrativa = (l) => [
-      /^ESTADO DE/i, /^SECRETARIA DE/i, /^POLICIA PENAL/i, /^SISTEMA DE/i,
-      /^UNIDADE:/i, /^PRONTUARIOS/i, /^IMPRESSO EM/i, /^TOTAL /i, /^i-PEN/i
-    ].some(rx => rx.test(l));
-
-    const temCaraDeOcorrencia = (l) => {
-      if (/[()|:/]/.test(l) && !l.includes('GAL:')) return true;
-      if (/\d{2}\/\d{2}\/\d{4}/.test(l)) return true;
-      return /\b(CONSULTA|SAIDA|TRABALHO|PUNICAO|PARLATORIO|PRIMEIRA|FASE)\b/i.test(l);
-    };
-
+    // Regex para extrair do relatório 1.9:
+    // Exemplo: 647126 THIAGO STEFANES TRABALHO INTERNO 03/11/2014 M C A 1 Oficina 1
     for (let i = 0; i < linhas.length; i++) {
       const linha = linhas[i];
+      const match = linha.match(/^(\d{6})\s+(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s+([M|F])\s+([A-Z0-9])/i);
 
-      // Detecta Galeria
-      const matchGal = linha.match(/GAL:\s*([A-Z])/i);
-      if (matchGal) {
-        galeriaAtual = matchGal[1].toUpperCase();
-        continue;
-      }
+      if (match) {
+        const matricula = match[1];
+        let nomeSituacao = match[2];
+        const dataStr = match[3]; // DD/MM/YYYY
+        // const ala = match[4];
+        const galeria = match[5].toUpperCase();
 
-      // Detecta Detento (Matrícula 6 dígitos + Nome)
-      const matchPreso = linha.match(/^(\d{6})\s+(.+)$/);
-      if (matchPreso && galeriaAtual) {
-        const matricula = matchPreso[1];
-        let nome = matchPreso[2];
-
-        // Tenta capturar continuação do nome em linhas seguintes
-        while (i + 1 < linhas.length) {
-          const prox = linhas[i + 1];
-          if (/^GAL:\s*[A-Z]/i.test(prox) || /^\d{6}\s+/.test(prox) ||
-            ehLinhaAdministrativa(prox) || temCaraDeOcorrencia(prox)) break;
-
-          nome += ' ' + prox;
-          i++;
-        }
-
-        // Limpeza do nome
-        nome = nome
-          .replace(/\s+(CONSULTA|SAIDA|TRABALHO|PUNICAO|PARLATORIO|PRIMEIRA)\b.*$/i, '')
+        // Limpeza do nome - remover a situação que fica grudada no final
+        let nome = nomeSituacao
+          .replace(/\s+(TRABALHO INTERNO|TRABALHO EXTERNO|RECOLHIDO\(A\)|SEMIABERTO|ABERTO|LIVRAMENTO CONDICIONAL|INTERNADO|ALBERGADO|NÃO INFORMADO|PROVISORIO|CONDENADO|REGIME ESPECIAL).*$/i, '')
           .replace(/[^A-ZÀ-ÚÇ' -]/gi, ' ')
           .replace(/\s+/g, ' ')
           .trim()
           .toUpperCase();
 
+        // Converte DD/MM/YYYY para YYYY-MM-DD
+        const [dia, mes, ano] = dataStr.split('/');
+        const data_ingresso = `${ano}-${mes}-${dia}`;
+
         if (nome && nome.length > 3) {
           registros.push({
             matricula,
             nome,
-            galeria: galeriaAtual
+            galeria,
+            data_ingresso
           });
         }
       }
@@ -159,14 +134,14 @@ const ImportarPresosPDF = ({ onComplete }) => {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="flex items-center gap-2 border-dashed border-gray-400 hover:border-blue-500 hover:text-blue-600 transition-all">
+        <Button variant="outline" className="flex items-center gap-2 border-dashed border-[#2D5016] hover:border-green-600 hover:text-green-700 transition-all">
           <FileUp size={16} />
-          1.5 - Sincronizar PDF (IPEN)
+          Sincronizar PDF (1.9)
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md bg-white">
         <DialogHeader>
-          <DialogTitle>Sincronizar Base de Internos</DialogTitle>
+          <DialogTitle>Sincronizar Relatório 1.9 (Data de Ingresso)</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50/50">
           {loading ? (
@@ -222,4 +197,4 @@ const ImportarPresosPDF = ({ onComplete }) => {
   );
 };
 
-export default ImportarPresosPDF;
+export default ImportarIPEN19;

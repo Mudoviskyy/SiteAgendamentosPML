@@ -277,7 +277,7 @@ const FAQPage = () => {
           <div className="bg-white border p-4 rounded-xl shadow-sm">
             <p className="font-bold text-[#2D5016] uppercase text-xs tracking-wider mb-1">Setor Social</p>
             <p className="text-lg font-black">(49) 3289-8484</p>
-            <p className="text-xs text-gray-500">Atendimento: 12h às 19h</p>
+            <p className="text-xs text-gray-500">Atendimento: 10h às 17h</p>
             <p className="mt-2 text-sm"><strong>WhatsApp:</strong> (49) 3289-8495</p>
           </div>
           <div className="space-y-4">
@@ -415,7 +415,7 @@ const FAQPage = () => {
             <li><strong>Blusa:</strong> De moletom, na cor branca ou cinza claro.</li>
             <li><strong>Calça:</strong> De moletom ou tactel, na cor cinza claro.</li>
             <li><strong>Meias:</strong> Na cor branca.</li>
-            <li><strong>Calçado:</strong> Sandália de borracha com solado baixo e flexível, em qualquer cor clara (exceto branca e laranja). Não pode conter fivela, tachas, enfeites ou peças metálicas.</li>
+            <li><strong>Calçado:</strong> Sandália de borracha com solado baixo e flexível, em qualquer cor clara (exceto branca e laranja)(TIPO HAVAIANAS). Não pode conter fivela, tachas, enfeites ou peças metálicas.</li>
           </ul>
 
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs text-gray-600 italic">

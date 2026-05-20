@@ -315,16 +315,21 @@ export const AuthProvider = ({ children }) => {
     return { success: true };
   };
 
-  const logout = async () => {
-    addLog('AuthContext: Logout Attempt');
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-    setEmailConfirmationRequired(false);
-    setAdminApprovalRequired(false);
-    setAuthError(null);
-    setOnlineUsers(0);
-    addLog('AuthContext: Logout Complete', {}, 'SUCCESS');
+  const logout = async (options = {}) => {
+    addLog('AuthContext: Logout Attempt', { options });
+    try {
+      await supabase.auth.signOut(options);
+    } catch (err) {
+      console.error('Erro ao fazer signOut no Supabase:', err);
+    } finally {
+      setUser(null);
+      setProfile(null);
+      setEmailConfirmationRequired(false);
+      setAdminApprovalRequired(false);
+      setAuthError(null);
+      setOnlineUsers(0);
+      addLog('AuthContext: Logout Complete', {}, 'SUCCESS');
+    }
   };
 
   return (

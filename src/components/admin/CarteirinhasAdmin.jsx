@@ -23,6 +23,8 @@ import {
 import { format } from 'date-fns';
 import { formatDate } from '@/utils/formatters';
 import { getIdentificacaoLabel, getTelefoneExibivel } from '@/utils/identificacao';
+import { useSincronizacaoDiaria } from '@/hooks/useSincronizacaoDiaria';
+import SincronizacaoDiariaModal from './SincronizacaoDiariaModal';
 
 const TIPOS_DOCUMENTO_LABEL = {
   foto_3x4: 'Foto 3x4',
@@ -74,6 +76,7 @@ const fixEncoding = (text) => {
 };
 
 const CarteirinhasAdmin = () => {
+  const { sincronizado, loading: syncLoading, marcarConcluido } = useSincronizacaoDiaria();
   const [carteirinhas, setCarteirinhas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -531,7 +534,10 @@ const CarteirinhasAdmin = () => {
     }
   };
 
-  const getTipoSolicitacaoBadge = (tipo) => {
+  const getTipoSolicitacaoBadge = (tipo, protocolo) => {
+    if (protocolo?.startsWith('PAR-')) {
+      return <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-100 text-[9px] px-1.5 py-0 uppercase font-black tracking-wider shadow-sm">Alteração de Parentesco</Badge>;
+    }
     if (tipo === 'nova') {
       return <Badge className="bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-100 text-[9px] px-1.5 py-0 uppercase font-black tracking-wider shadow-sm">1ª Via (Nova)</Badge>;
     }
@@ -572,8 +578,13 @@ const CarteirinhasAdmin = () => {
     bloqueado: 'Bloqueado'
   };
 
+  if (syncLoading) {
+    return <div className="flex h-screen items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-blue-500 w-12 h-12" /></div>;
+  }
+
   return (
     <div className="space-y-4">
+      {!sincronizado && <SincronizacaoDiariaModal open={true} onComplete={marcarConcluido} />}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <div className="relative w-full sm:max-w-sm">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
@@ -644,6 +655,7 @@ const CarteirinhasAdmin = () => {
           <Badge className="bg-purple-100 text-purple-800 border-purple-200 hover:bg-purple-100 text-[9px] px-1.5 py-0 uppercase font-black tracking-wider shadow-sm">Renovação</Badge>
           <Badge className="bg-slate-100 text-slate-800 border-slate-200 hover:bg-slate-100 text-[9px] px-1.5 py-0 uppercase font-black tracking-wider shadow-sm">Já Tenho</Badge>
           <Badge className="bg-pink-500 text-white border-pink-600 hover:bg-pink-500 text-[9px] px-1.5 py-0 uppercase font-black tracking-wider shadow-sm">Menor - TEM PRIORIDADE NA APROVAÇÃO</Badge>
+          <Badge className="bg-rose-100 text-rose-800 border-rose-200 hover:bg-rose-100 text-[9px] px-1.5 py-0 uppercase font-black tracking-wider shadow-sm">Alteração de Parentesco</Badge>
         </div>
       </div>
 
@@ -687,13 +699,16 @@ const CarteirinhasAdmin = () => {
                       {c.protocolo?.startsWith('VIN-') && (
                         <Badge className="bg-blue-600 text-white border-none text-[8px] h-4 px-1 font-black">VÍNCULO</Badge>
                       )}
+                      {c.protocolo?.startsWith('PAR-') && (
+                        <Badge className="bg-rose-600 text-white border-none text-[8px] h-4 px-1 font-black">ALT. PARENTESCO</Badge>
+                      )}
                     </div>
                     {c.menor_idade && c.nome_menor && (
                       <div className="text-[10px] text-pink-700 font-bold mt-0.5">Menor: {c.nome_menor}</div>
                     )}
                     <div className="flex items-center gap-2 mt-1">
                       <div className="text-[10px] font-mono text-gray-400 uppercase tracking-tighter">ID: {c.protocolo}</div>
-                      {getTipoSolicitacaoBadge(c.possui_carteirinha)}
+                      {getTipoSolicitacaoBadge(c.possui_carteirinha, c.protocolo)}
                     </div>
                   </TableCell>
                   <TableCell className="align-middle py-4">
@@ -787,7 +802,7 @@ const CarteirinhasAdmin = () => {
             <DialogTitle className="text-[#2D5016] flex items-center justify-between gap-2 pr-6">
               <span className="flex items-center gap-2"><Eye className="w-5 h-5" /> Detalhes da Solicitação</span>
               <div className="flex items-center gap-2">
-                {getTipoSolicitacaoBadge(selectedCarteirinha?.possui_carteirinha)}
+                {getTipoSolicitacaoBadge(selectedCarteirinha?.possui_carteirinha, selectedCarteirinha?.protocolo)}
                 {selectedCarteirinha?.protocolo?.startsWith('VIN-') && (
                   <Badge className="bg-blue-600 text-white border-none uppercase text-[10px] font-black">Solicitação de Vínculo</Badge>
                 )}
@@ -816,6 +831,15 @@ const CarteirinhasAdmin = () => {
                         <div className="space-y-0.5">
                           <p className="text-[9px] font-bold text-green-600/70 uppercase tracking-wider">Parentesco</p>
                           <p className="text-sm font-bold text-gray-700 uppercase">{fixEncoding(selectedCarteirinha.parentesco)}</p>
+                          {/* Parentesco solicitado para PAR- */}
+                          {selectedCarteirinha?.protocolo?.startsWith('PAR-') && selectedCarteirinha?.parentesco_solicitado && (
+                            <div className="mt-1 flex items-center gap-1.5">
+                              <span className="text-[9px] font-black text-rose-500 uppercase">→ Solicitado:</span>
+                              <span className="text-xs font-black text-rose-700 uppercase bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                {fixEncoding(selectedCarteirinha.parentesco_solicitado)}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="space-y-0.5">
                           <p className="text-[9px] font-bold text-green-600/70 uppercase tracking-wider">{getIdentificacaoLabel(selectedCarteirinha.tipo_identificacao)}</p>
@@ -1115,14 +1139,44 @@ const CarteirinhasAdmin = () => {
                     >
                       <XCircle className="w-4 h-4 mr-2" /> Recusar
                     </Button>
-                    <Button
-                      className="bg-[#2D5016] hover:bg-[#1f3810] text-white min-w-[150px]"
-                      onClick={() => handleStatusUpdate(selectedCarteirinha.id, 'aprovado')}
-                      disabled={actionLoading}
-                    >
-                      {actionLoading ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
-                      Aprovar Agora
-                    </Button>
+
+                    {/* Aprovação especial para PAR- (altera apenas parentesco) */}
+                    {selectedCarteirinha?.protocolo?.startsWith('PAR-') ? (
+                      <Button
+                        className="bg-rose-600 hover:bg-rose-700 text-white min-w-[150px]"
+                        onClick={async () => {
+                          setActionLoading(true);
+                          try {
+                            await carteirinhasService.aprovarAlteracaoParentesco(
+                              selectedCarteirinha.id,
+                              selectedCarteirinha.usuario_id,
+                              selectedCarteirinha.parentesco_solicitado
+                            );
+                            // Apagar documentos após aprovação
+                            await apagarDocumentosCarteirinha(selectedCarteirinha.id);
+                            toast({ title: 'Parentesco atualizado com sucesso!', className: 'bg-[#2D5016] text-white border-none' });
+                            fetchCarteirinhas();
+                            setSelectedCarteirinha(null);
+                          } catch (error) {
+                            toast({ title: 'Erro ao aprovar', description: error.message, className: 'bg-red-500 text-white border-none' });
+                          }
+                          setActionLoading(false);
+                        }}
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+                        Aprovar Alteração
+                      </Button>
+                    ) : (
+                      <Button
+                        className="bg-[#2D5016] hover:bg-[#1f3810] text-white min-w-[150px]"
+                        onClick={() => handleStatusUpdate(selectedCarteirinha.id, 'aprovado')}
+                        disabled={actionLoading}
+                      >
+                        {actionLoading ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+                        Aprovar Agora
+                      </Button>
+                    )}
                   </>
                 )}
 

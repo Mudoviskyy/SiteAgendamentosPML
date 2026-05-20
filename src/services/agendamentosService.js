@@ -13,6 +13,7 @@ export const verificarCarteirinhaStatus = async (userId) => {
     .eq('menor_idade', false)
     .not('protocolo', 'like', 'VIN-%')
     .not('protocolo', 'like', 'MEN-%')
+    .not('protocolo', 'like', 'PAR-%')
     .order('validade', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -71,6 +72,40 @@ export const cancelarAgendamentoVisitante = async (agendamentoId, visitanteId) =
 
   if (error) throw error;
   return data;
+};
+
+export const desfazerCancelamentoAgendamento = async (agendamentoId) => {
+  const { data: agendamento, error: getError } = await supabase
+    .from('agendamentos')
+    .select('vaga_configuracao_id')
+    .eq('id', agendamentoId)
+    .single();
+    
+  if (getError) throw getError;
+  
+  const { data: vaga, error: vagaError } = await supabase
+    .from('view_vagas_disponiveis')
+    .select('vagas_restantes')
+    .eq('id', agendamento.vaga_configuracao_id)
+    .maybeSingle();
+
+  if (vagaError) throw vagaError;
+
+  if (!vaga || vaga.vagas_restantes <= 0) {
+    throw new Error('Não há vagas disponíveis para reativar este agendamento.');
+  }
+
+  const { data, error } = await supabase
+    .from('agendamentos')
+    .update({ 
+      status: 'pendente',
+      motivo_recusa: null
+    })
+    .eq('id', agendamentoId)
+    .select();
+
+  if (error) throw error;
+  return data[0];
 };
 
 export const getVagasConfiguracaoOptions = async () => {

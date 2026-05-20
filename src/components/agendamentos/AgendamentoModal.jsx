@@ -47,6 +47,9 @@ const AgendamentoModal = ({ onSuccess }) => {
   const [verificandoCarteirinha, setVerificandoCarteirinha] = useState(true);
   const [meusPresos, setMeusPresos] = useState([]);
   const [meusMenores, setMeusMenores] = useState([]);
+  const [bloqueioIntima, setBloqueioIntima] = useState(false);
+  const [bloqueioComportamento, setBloqueioComportamento] = useState(false);
+  const [verificandoIngresso, setVerificandoIngresso] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -180,6 +183,62 @@ const AgendamentoModal = ({ onSuccess }) => {
     }
   }, [formData.data_visita, currentStep, formData.tipo_visita, formData.galeria, toast]);
 
+  // Validar regra de 60 dias E comportamento para visita íntima
+  useEffect(() => {
+    const verificarIngresso = async () => {
+      if (!formData.matricula_preso || !formData.data_visita || currentStep !== 4) {
+        setBloqueioIntima(false);
+        setBloqueioComportamento(false);
+        return;
+      }
+
+      const tipo = formData.tipo_visita?.toLowerCase() || '';
+      if (tipo === 'íntima' || tipo === 'intima') {
+        setVerificandoIngresso(true);
+        try {
+          const { data, error } = await supabase
+            .from('base_pdf')
+            .select('data_ingresso, comportamento')
+            .eq('matricula', formData.matricula_preso)
+            .single();
+
+          // --- Checagem de 60 dias ---
+          if (data && data.data_ingresso) {
+            const dataAgendada = new Date(formData.data_visita);
+            const dataIngresso = new Date(data.data_ingresso);
+            dataAgendada.setHours(0, 0, 0, 0);
+            dataIngresso.setHours(0, 0, 0, 0);
+            const diffDays = Math.floor((dataAgendada - dataIngresso) / (1000 * 60 * 60 * 24));
+            setBloqueioIntima(diffDays < 60);
+          } else {
+            setBloqueioIntima(false);
+          }
+
+          // --- Checagem de comportamento ---
+          // null ou vazio = considerar BOM (não bloqueia)
+          const comp = data?.comportamento;
+          if (comp && comp.trim().toLowerCase() !== 'bom') {
+            setBloqueioComportamento(true);
+          } else {
+            setBloqueioComportamento(false);
+          }
+
+        } catch (err) {
+          console.error("Erro ao buscar dados do interno:", err);
+          setBloqueioIntima(false);
+          setBloqueioComportamento(false);
+        } finally {
+          setVerificandoIngresso(false);
+        }
+      } else {
+        setBloqueioIntima(false);
+        setBloqueioComportamento(false);
+      }
+    };
+
+    verificarIngresso();
+  }, [formData.matricula_preso, formData.data_visita, formData.tipo_visita, currentStep]);
+
   const handleNext = () => {
     if (currentStep === 1 && (!formData.tipo_visita || !formData.galeria)) {
       toast({ title: "Atenção", description: "Selecione o tipo de visita e a galeria.", className: "bg-red-500 text-white border-none" });
@@ -213,6 +272,24 @@ const AgendamentoModal = ({ onSuccess }) => {
       });
       setSubmitting(false);
       return;
+    }
+
+    if (status.validade && formData.data_visita) {
+      const dataVisita = new Date(`${formData.data_visita}T00:00:00`);
+      // Truncar a data de validade para comparar apenas a data (sem horas)
+      const dataValidade = new Date(status.validade);
+      dataValidade.setHours(0, 0, 0, 0);
+
+      if (dataVisita > dataValidade) {
+        toast({
+          title: "Carteirinha vencida para esta data",
+          description: `Sua carteirinha vence em ${dataValidade.toLocaleDateString('pt-BR')}. Não é possível agendar para datas posteriores ao vencimento.`,
+          className: "bg-red-500 text-white border-none",
+          duration: 6000
+        });
+        setSubmitting(false);
+        return;
+      }
     }
 
     if (!formData.nome_preso?.trim()) {
@@ -597,10 +674,43 @@ const AgendamentoModal = ({ onSuccess }) => {
                 </div>
 
                 <div className="space-y-4">
+                  {bloqueioIntima && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 shadow-sm mb-4"
+                    >
+                      <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-red-800 font-bold uppercase text-sm">Agendamento Bloqueado</h4>
+                        <p className="text-red-700 text-sm mt-1">
+                          Este detento tem data de ingresso na unidade com menos de 60 dias da data agendada para a íntima. Mais informações no Setor Social via Whatsapp.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {bloqueioComportamento && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3 shadow-sm mb-4"
+                    >
+                      <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="text-red-800 font-bold uppercase text-sm">Agendamento Bloqueado</h4>
+                        <p className="text-red-700 text-sm mt-1">
+                          Este detento não está com o comportamento BOM, ele não pode ter visitas íntimas até que esse status mude. Mais informações no Setor Social via Whatsapp.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
+
                   <div className="grid grid-cols-1 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="seletor_preso">Selecione o Interno que irá visitar *</Label>
-                      <Select
+                      <div className="relative">
+                        <Select
                         onValueChange={(val) => {
                           const preso = meusPresos.find(p => p.id === val);
                           if (preso) {
@@ -625,6 +735,12 @@ const AgendamentoModal = ({ onSuccess }) => {
                           ))}
                         </SelectContent>
                       </Select>
+                      {verificandoIngresso && (
+                        <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                          <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                        </div>
+                      )}
+                      </div>
 
                       {!meusPresos.find(p => p.id === formData.carteirinha_id)?.matricula_preso && formData.carteirinha_id && (
                         <motion.div
@@ -871,7 +987,7 @@ const AgendamentoModal = ({ onSuccess }) => {
           <Button
             onClick={handleSubmit}
             className="bg-[#2D5016] hover:bg-[#1f3810] text-white min-w-[140px]"
-            disabled={!carteirinhaValida || verificandoCarteirinha || submitting}
+            disabled={!carteirinhaValida || verificandoCarteirinha || submitting || verificandoIngresso || bloqueioIntima || bloqueioComportamento}
           >
             {submitting ? (
               <Loader2 className="w-4 h-4 animate-spin mr-2" />

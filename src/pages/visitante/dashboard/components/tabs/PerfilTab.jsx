@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, PlayCircle, Mail, Bug } from 'lucide-react';
+import { AlertCircle, PlayCircle, Mail, Bug, Trash2, ShieldAlert } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import { getIdentificacaoLabel, getTelefoneExibivel } from '@/utils/identificacao';
+import ExcluirContaModal from '../../modais/ExcluirContaModal';
 
 const formatLocalDate = (dateString) => {
   if (!dateString) return '—';
@@ -19,6 +20,7 @@ const PerfilTab = ({
   profile,
   setShowVideoModal
 }) => {
+  const [showExcluirModal, setShowExcluirModal] = useState(false);
   return (
     <div className="space-y-6 animate-in fade-in-50">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -105,6 +107,41 @@ const PerfilTab = ({
           </div>
         </CardContent>
       </Card>
+
+      {/* ===== DANGER ZONE ===== */}
+      <div className="rounded-2xl border-2 border-red-200 bg-red-50/50 overflow-hidden">
+        <div className="flex items-center gap-3 px-8 py-5 border-b border-red-200 bg-red-50">
+          <div className="bg-red-100 p-2 rounded-xl">
+            <ShieldAlert className="w-4 h-4 text-red-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-red-700 uppercase tracking-widest">Zona de Perigo</h3>
+            <p className="text-[11px] text-red-500 font-medium">Ações irreversíveis relativas à sua conta</p>
+          </div>
+        </div>
+        <div className="px-8 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="space-y-1 max-w-md">
+            <p className="text-sm font-bold text-red-800">Excluir minha conta</p>
+            <p className="text-[13px] text-red-600 leading-relaxed">
+              Remove permanentemente seu acesso, documentos enviados e carteirinhas ativas.
+              Registros históricos de visitas são mantidos conforme a LGPD (Art. 16).
+            </p>
+          </div>
+          <button
+            id="btn-excluir-conta"
+            onClick={() => setShowExcluirModal(true)}
+            className="flex-shrink-0 flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-sm hover:shadow-md"
+          >
+            <Trash2 className="w-4 h-4" />
+            Excluir Minha Conta
+          </button>
+        </div>
+      </div>
+
+      <ExcluirContaModal
+        isOpen={showExcluirModal}
+        onClose={() => setShowExcluirModal(false)}
+      />
     </div>
   );
 };

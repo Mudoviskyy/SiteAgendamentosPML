@@ -79,7 +79,7 @@ export const MAP_VALUE_TO_RULE = {
 };
 
 export const DOCUMENTOS_CONFIG = [
-  { label: "Sua Foto (estilo 3x4)", name: "foto_3x4", multiple: false, optional: false },
+  { label: "Sua Foto (estilo 3x4, pode ser do celular)", name: "foto_3x4", multiple: false, optional: false },
   { label: "Seu RG (Frente)", name: "rg_frente", multiple: false, optional: false },
   { label: "Seu RG (Verso)", name: "rg_verso", multiple: false, optional: false },
   { label: "Certidão de Casamento ou União Estável", name: "certidao_casamento", multiple: true, optional: false },
@@ -109,9 +109,9 @@ const RequisitosDicas = () => {
       <div className="mt-3 pt-3 border-t border-blue-200">
         <p className="text-[11px] font-bold text-blue-900 leading-tight flex flex-col gap-1.5">
           <span>Dica: Se o seu PDF for muito grande ou der erro ao enviar, converta para imagem:</span>
-          <a 
-            href="https://www.ilovepdf.com/pt/pdf_para_jpg" 
-            target="_blank" 
+          <a
+            href="https://www.ilovepdf.com/pt/pdf_para_jpg"
+            target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-800 underline decoration-blue-300 underline-offset-2 transition-colors"
           >
