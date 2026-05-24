@@ -361,146 +361,148 @@ export const parsear813 = (allItems, periodoRef) => {
       .trim()
       .toUpperCase();
 
-  // ── 1. Detect column X positions from header keywords ──────────────────────
-  const headerKeywords = {
-    REEDUCANDO: "reeducando",
-    VISITANTE:  "visitante",
-    VINCULO:    "vinculo",
-    PARENTESCO: "vinculo",
-  };
-
-  const columnX = {};
-  let headerY = null;
-
-  for (const item of allItems) {
-    const text = item.text || item.str || "";
-    const n = normLocal(text);
-    for (const [keyword, colName] of Object.entries(headerKeywords)) {
-      if ((n === keyword || n.startsWith(keyword)) && !columnX[colName]) {
-        columnX[colName] = item.x;
-        if (item.page === 1 && !headerY) headerY = item.y;
-      }
-    }
-  }
-
-  if (!columnX.reeducando || !columnX.visitante || !columnX.vinculo) {
-    throw new Error("Colunas insuficientes no PDF. Verifique se é o Relatório 8.13 (Relação de Parentesco).");
-  }
-
-  // Column boundaries derived from header positions
-  const xReeducando = columnX.reeducando;
-  const xVisitante  = columnX.visitante;
-  const xVinculo    = columnX.vinculo;
-
-  const getColumn = (x) => {
-    if (x < xVisitante - 5) return "reeducando";
-    if (x < xVinculo   - 5) return "visitante";
-    return "vinculo";
-  };
-
-  // ── 2. Filter header / footer / housing rows ────────────────────────────────
-  const isHousingText = (n) =>
-    n.startsWith("GALERIA:") || n.startsWith("CELA:") || n.startsWith("BLOCO:") ||
-    n.startsWith("PISO:")    || n.startsWith("RESIDENCIA:") || n.startsWith("ALA:");
-
-  const dataItems = allItems.filter(item => {
-    const text = item.text || item.str || "";
-    if (!text.trim()) return false;
-    if (item.page === 1 && headerY && item.y >= headerY - 2) return false;
-    const n = normLocal(text);
-    if (Object.keys(headerKeywords).some(k => n === k || n.startsWith(k))) return false;
-    if (n.includes("IMPRESSO EM") || n.startsWith("PAGINA") || n.includes("VISITANTES POR")) return false;
-    if (n.includes("ESTADO DE SANTA") || n.includes("SECRETARIA") || n.includes("POLICIA PENAL")) return false;
-    if (n.startsWith("RESULTADO") || n.startsWith("TOTAL") || n.startsWith("WWW.")) return false;
-    if (isHousingText(n)) return false;
-    // Drop single-character noise in reeducando column (GALERIA letter, cell number)
-    if (text.length === 1 && item.x < xVisitante) return false;
-    return true;
-  });
-
-  // ── 3. Group items into rows by Y coordinate ────────────────────────────────
-  const yTolerance = 3;
-  const rowMap = new Map();
-  for (const item of dataItems) {
-    const yKey = Math.round(item.y / yTolerance) * yTolerance;
-    const key = `${item.page}_${yKey}`;
-    if (!rowMap.has(key)) rowMap.set(key, []);
-    rowMap.get(key).push(item);
-  }
-
-  const sortedRows = [...rowMap.entries()]
-    .map(([key, items]) => {
-      const [page, y] = key.split("_").map(Number);
-      return { page, y, items };
-    })
-    .sort((a, b) => a.page - b.page || b.y - a.y);
-
-  // ── 4. Assign columns and build parsedRows ──────────────────────────────────
-  const parsedRows = sortedRows.map(row => {
-    const cols = {};
-    for (const item of row.items) {
-      const text = item.text || item.str || "";
-      const col = getColumn(item.x);
-      if (!cols[col]) cols[col] = "";
-      cols[col] += (cols[col] ? " " : "") + text;
-    }
-    return cols;
-  });
-
-  // ── 5. Carry-forward prisoner + extract visitor records ─────────────────────
-  const resultado = [];
+  const finalRegistros = [];
+  
   let currentMatricula = null;
   let currentNomePreso = null;
-
-  for (const row of parsedRows) {
-    const reeducandoRaw = (row.reeducando || "").trim();
-
-    // Prisoner header: exactly 6 digits + name in the reeducando column
-    const matrMatch = reeducandoRaw.match(/^(\d{6})\s+(.+)/);
-    if (matrMatch) {
-      currentMatricula = matrMatch[1];
-      // Strip any accidentally appended housing info
-      let nomePreso = matrMatch[2]
-        .replace(/\s+(GALERIA|CELA|BLOCO|PISO|RESIDENCIA|ALA)\s*:.*$/i, "")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toUpperCase();
-      currentNomePreso = nomePreso;
-    }
-
-    if (!currentMatricula) continue;
-
-    const visitanteRaw = (row.visitante || "").trim();
-    if (!visitanteRaw) continue;
-
-    // Prontuário IPEN: short number (≤6 digits) at the start of the visitante cell.
-    // CPFs have 11 digits – we deliberately limit the match to ≤6 digits so CPFs
-    // are never mistaken for prontuários.
-    const prontMatch = visitanteRaw.match(/^(\d{1,6})\s+[A-Z]/);
-    const prontuarioVisitante = prontMatch ? prontMatch[1] : null;
-
-    // Remove the leading number (prontuário) to get only the visitor name
-    const nomeVisitante = visitanteRaw
-      .replace(/^\d{1,6}\s+/, "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .toUpperCase();
-
-    if (!nomeVisitante || nomeVisitante.length < 4) continue;
-
-    const vinculo = (row.vinculo || "Não Identificado").replace(/\s+/g, " ").trim();
-
-    resultado.push({
-      matricula_preso:            currentMatricula,
-      nome_preso:                 currentNomePreso,
-      nome_visitante:             nomeVisitante,
-      nome_visitante_normalizado: normLocal(nomeVisitante),
-      vinculo,
-      periodo_ref:                periodoRef,
-      prontuario_visitante:       prontuarioVisitante,
+  
+  const numPages = allItems.length > 0 ? Math.max(...allItems.map(item => item.page)) : 0;
+  
+  for (let p = 1; p <= numPages; p++) {
+    const pageItems = allItems.filter(item => item.page === p);
+    if (pageItems.length === 0) continue;
+    
+    // 1. Identify Y coordinates that contain housing keywords
+    const housingY = new Set();
+    pageItems.forEach(item => {
+      const n = normLocal(item.text);
+      if (
+        n.startsWith('GALERIA:') || 
+        n.startsWith('CELA:') || 
+        n.startsWith('BLOCO:') || 
+        n.startsWith('PISO:') || 
+        n.startsWith('RESIDENCIA:')
+      ) {
+        housingY.add(item.y);
+      }
     });
+    
+    // 2. Filter out header, footer, and housing details
+    const dataItems = pageItems.filter(item => {
+      if (item.y > 720 || item.y < 50) return false;
+      
+      const n = normLocal(item.text);
+      if (
+        n.startsWith('GALERIA:') || 
+        n.startsWith('CELA:') || 
+        n.startsWith('BLOCO:') || 
+        n.startsWith('PISO:') || 
+        n.startsWith('RESIDENCIA:')
+      ) {
+        return false;
+      }
+      if (item.text === '-' || item.text === '|') return false;
+      
+      const isHousingRow = Array.from(housingY).some(hy => Math.abs(hy - item.y) <= 3);
+      if (isHousingRow) {
+        if (item.x < 269) {
+          if (/^[A-Z]$/.test(item.text)) return false;
+          if (/^\d+$/.test(item.text)) return false;
+        } else {
+          if (/^[A-Z]$/.test(item.text)) return false;
+        }
+      }
+      
+      return true;
+    });
+    
+    // Partition items into columns
+    const reeducandoItems = dataItems.filter(item => item.x < 269);
+    const visitanteItems = dataItems.filter(item => item.x >= 269 && item.x < 415);
+    const vinculoItems = dataItems.filter(item => item.x >= 415 && item.x < 515);
+    const carteiraItems = dataItems.filter(item => item.x >= 515);
+    
+    // 3. Find all prisoner headers on this page
+    // A prisoner header starts with a 6-digit number in the reeducando column
+    const prisonerStarts = reeducandoItems.filter(item => /^\d{6}$/.test(item.text));
+    const pagePrisoners = [];
+    
+    prisonerStarts.forEach(startItem => {
+      const nameItems = reeducandoItems
+        .filter(item => item.y <= startItem.y && item.y >= startItem.y - 12)
+        .sort((a, b) => b.y - a.y || a.x - b.x);
+      
+      const fullName = nameItems
+        .map(item => item.text)
+        .join(' ')
+        .replace(/^\d{6}\s*/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+        
+      pagePrisoners.push({
+        y: startItem.y,
+        matricula: startItem.text,
+        nome: fullName.toUpperCase()
+      });
+    });
+    
+    // 4. Find all visitor starts on this page
+    const visitorStarts = visitanteItems.filter(item => /^\d+$/.test(item.text));
+    visitorStarts.sort((a, b) => b.y - a.y);
+    
+    for (let i = 0; i < visitorStarts.length; i++) {
+      const startItem = visitorStarts[i];
+      const yStart = startItem.y;
+      const yEnd = i + 1 < visitorStarts.length ? visitorStarts[i + 1].y : 49;
+      
+      const getItemsInRange = (colItems) => {
+        return colItems
+          .filter(item => item.y > yEnd && item.y <= yStart + 2)
+          .sort((a, b) => b.y - a.y || a.x - b.x);
+      };
+      
+      const vRange = getItemsInRange(visitanteItems);
+      const vinRange = getItemsInRange(vinculoItems);
+      const cRange = getItemsInRange(carteiraItems);
+      
+      const cleanText = (range) => {
+        return range.map(item => item.text).join(' ').replace(/\s+/g, ' ').trim();
+      };
+      
+      const visitanteText = cleanText(vRange);
+      const vinculoText = cleanText(vinRange);
+      const carteiraText = cleanText(cRange);
+      
+      if (!visitanteText) continue;
+      
+      const prontMatch = visitanteText.match(/^(\d+)\s+(.+)/);
+      if (!prontMatch) continue;
+      
+      const prontuarioVisitante = prontMatch[1];
+      const nomeVisitante = prontMatch[2].toUpperCase().trim();
+      
+      const candidates = pagePrisoners.filter(p => p.y >= yStart - 15);
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => a.y - b.y);
+        currentMatricula = candidates[0].matricula;
+        currentNomePreso = candidates[0].nome;
+      }
+      
+      finalRegistros.push({
+        matricula_preso: currentMatricula,
+        nome_preso: currentNomePreso,
+        nome_visitante: nomeVisitante,
+        nome_visitante_normalizado: normLocal(nomeVisitante),
+        vinculo: vinculoText || 'Não Identificado',
+        periodo_ref: periodoRef,
+        prontuario_visitante: prontuarioVisitante,
+      });
+    }
   }
-
-  if (resultado.length === 0) throw new Error("Arquivo incorreto ou sem dados. Esperado Relatório 8.13.");
-  return resultado;
+  
+  if (finalRegistros.length === 0) {
+    throw new Error("Arquivo incorreto ou sem dados. Esperado Relatório 8.13.");
+  }
+  
+  return finalRegistros;
 };

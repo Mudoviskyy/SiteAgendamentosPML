@@ -550,8 +550,10 @@ const CarteirinhasAdmin = () => {
     if (tipo === 'nao') {
       return <Badge className="bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-100 text-[9px] px-1.5 py-0 uppercase font-black tracking-wider shadow-sm">Solicitação (Legado)</Badge>;
     }
-    return null;
+    // Tipo não informado (null, undefined ou valor inesperado)
+    return <Badge className="bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100 text-[9px] px-1.5 py-0 uppercase font-black tracking-wider shadow-sm animate-pulse">⚠ Tipo não informado</Badge>;
   };
+
 
   const getRowStyle = (carteirinha) => {
     if (carteirinha.status !== 'pendente') return 'hover:bg-gray-50/50';
@@ -708,7 +710,7 @@ const CarteirinhasAdmin = () => {
                     )}
                     <div className="flex items-center gap-2 mt-1">
                       <div className="text-[10px] font-mono text-gray-400 uppercase tracking-tighter">ID: {c.protocolo}</div>
-                      {getTipoSolicitacaoBadge(c.possui_carteirinha, c.protocolo)}
+                      {c.status === 'pendente' && getTipoSolicitacaoBadge(c.possui_carteirinha, c.protocolo)}
                     </div>
                   </TableCell>
                   <TableCell className="align-middle py-4">

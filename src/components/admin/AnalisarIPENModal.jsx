@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import * as pdfjs from 'pdfjs-dist';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import {
@@ -13,12 +12,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Users, CheckCircle, AlertTriangle, CalendarDays } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
-
-/** Normaliza texto: remove acentos, caixa alta, sem espaços extras */
-const norm = (str) =>
-  (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+import { extractItemsFromPDF, parsear813 } from '@/lib/ipenParsers';
 
 const AnalisarIPENModal = ({ onComplete, mesesDisponiveis = [] }) => {
   const [loading, setLoading] = useState(false);
@@ -28,7 +22,7 @@ const AnalisarIPENModal = ({ onComplete, mesesDisponiveis = [] }) => {
   const { toast } = useToast();
 
   // -------------------------------------------------------
-  // Gera opções de mês (mesmas do ImportarVisitasPDF)
+  // Gera opções de mês
   // -------------------------------------------------------
   const getMeses = () => {
     if (mesesDisponiveis.length > 0) {
@@ -51,180 +45,8 @@ const AnalisarIPENModal = ({ onComplete, mesesDisponiveis = [] }) => {
   };
 
   // -------------------------------------------------------
-  // Extrai todos os itens de texto com coordenadas X,Y
-  // -------------------------------------------------------
-  const extractItems = async (file) => {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjs.getDocument(arrayBuffer).promise;
-    const allItems = [];
-
-    for (let p = 1; p <= pdf.numPages; p++) {
-      const page = await pdf.getPage(p);
-      const textContent = await page.getTextContent();
-
-      for (const item of textContent.items) {
-        const text = item.str.trim();
-        if (!text) continue;
-        allItems.push({
-          text,
-          x: Math.round(item.transform[4]),
-          y: Math.round(item.transform[5]),
-          page: p,
-        });
-      }
-    }
-    return allItems;
-  };
-
-  // -------------------------------------------------------
-  // Parser do Relatório 8.13 — Relação de Parentesco
-  //
-  // Estrutura do PDF (colunas identificadas por X):
-  //   Reeducando | Cela | Visitante | Vínculo | Carteira
-  //
-  // Estratégia:
-  //  1. Detecta colunas pelo cabeçalho da pág. 1
-  //  2. Agrupa itens por linha visual (Y ± tolerância, por página)
-  //  3. O campo "Reeducando" é preenchido carry-forward (merged cell)
-  //  4. Extrai matrícula (6 dígitos) do campo Reeducando
-  //  5. Extrai nome limpo do campo Visitante (remove ID numérico)
-  // -------------------------------------------------------
-  const parseParentescoPDF = (allItems) => {
-    // 1. Detecta colunas no cabeçalho
-    const headerKeywords = {
-      'REEDUCANDO': 'reeducando',
-      'CELA':       'cela',
-      'VISITANTE':  'visitante',
-      'VINCULO':    'vinculo',
-      'CARTEIRA':   'carteira',
-    };
-
-    const columnX = {};
-    let headerY = null;
-
-    for (const item of allItems) {
-      const n = norm(item.text);
-      for (const [keyword, colName] of Object.entries(headerKeywords)) {
-        if ((n === keyword || n.startsWith(keyword)) && !columnX[colName]) {
-          columnX[colName] = item.x;
-          if (item.page === 1 && !headerY) headerY = item.y;
-        }
-      }
-    }
-
-    console.log('[8.13 Parser] Colunas detectadas:', columnX);
-
-    if (!columnX.reeducando || !columnX.visitante || !columnX.vinculo) {
-      throw new Error(
-        `Colunas insuficientes no PDF. Encontradas: ${Object.keys(columnX).join(', ')}. ` +
-        `Verifique se é o Relatório 8.13 (Relação de Parentesco).`
-      );
-    }
-
-    // Ordena colunas por X
-    const sortedCols = Object.entries(columnX).sort(([, a], [, b]) => a - b);
-
-    const getColumn = (x) => {
-      for (let i = sortedCols.length - 1; i >= 0; i--) {
-        const [colName, colX] = sortedCols[i];
-        if (x >= colX - 20) return colName;
-      }
-      return sortedCols[0]?.[0] || 'unknown';
-    };
-
-    // 2. Filtra itens abaixo do cabeçalho
-    const dataItems = allItems.filter(item => {
-      if (item.page === 1 && headerY && item.y >= headerY - 2) return false;
-      const n = norm(item.text);
-      if (Object.keys(headerKeywords).some(k => n === k || n.startsWith(k))) return false;
-      // Filtra rodapés e metadados comuns
-      if (n.includes('IMPRESSO EM') || n.startsWith('PAGINA') || n.includes('VISITANTES POR')) return false;
-      if (n.includes('ESTADO DE SANTA') || n.includes('SECRETARIA') || n.includes('POLICIA PENAL')) return false;
-      if (n.includes('CARTEIRAS COM MENOS') || n.includes('LAGES') || n.includes('8082')) return false;
-      if (n.startsWith('RESULTADO') || n.startsWith('TOTAL') || n.startsWith('WWW.')) return false;
-      return true;
-    });
-
-    // 3. Agrupa por linha visual (Y ± 3px por página)
-    const yTolerance = 3;
-    const rowMap = new Map();
-    for (const item of dataItems) {
-      const yKey = Math.round(item.y / yTolerance) * yTolerance;
-      const key = `${item.page}_${yKey}`;
-      if (!rowMap.has(key)) rowMap.set(key, []);
-      rowMap.get(key).push(item);
-    }
-
-    // Ordena linhas: por página ASC, por Y DESC (topo → baixo no PDF)
-    const sortedRows = [...rowMap.entries()]
-      .map(([key, items]) => {
-        const [page, y] = key.split('_').map(Number);
-        return { page, y, items };
-      })
-      .sort((a, b) => a.page - b.page || b.y - a.y);
-
-    // 4. Monta linhas com colunas atribuídas
-    const parsedRows = sortedRows.map(row => {
-      const cols = {};
-      for (const item of row.items) {
-        const col = getColumn(item.x);
-        if (!cols[col]) cols[col] = '';
-        cols[col] += (cols[col] ? ' ' : '') + item.text;
-      }
-      return cols;
-    });
-
-    console.log('[8.13 Parser] Primeiras 5 linhas:', parsedRows.slice(0, 5));
-
-    // 5. Carry-forward do Reeducando + extração dos dados
-    const resultado = [];
-    let currentMatricula = null;
-    let currentNomePreso = null;
-
-    for (const row of parsedRows) {
-      // Linha de Reeducando: campo reeducando preenchido, começa com 6 dígitos
-      const reeducandoRaw = (row.reeducando || '').trim();
-      const matrMatch = reeducandoRaw.match(/^(\d{6})\s+(.+)/);
-      if (matrMatch) {
-        currentMatricula = matrMatch[1];
-        currentNomePreso = matrMatch[2].replace(/\s+/g, ' ').trim().toUpperCase();
-      }
-
-      if (!currentMatricula) continue;
-
-      // Linha de visitante: campo visitante preenchido
-      const visitanteRaw = (row.visitante || '').trim();
-      if (!visitanteRaw) continue;
-
-      // Extrai o ID numérico (prontuário) do início do visitante
-      const prontMatch = visitanteRaw.match(/^(\d+)/);
-      const prontuarioVisitante = prontMatch ? prontMatch[1] : null;
-
-      // Remove ID numérico do início do nome do visitante (ex: "63557 FULANA DE TAL")
-      const nomeVisitante = visitanteRaw.replace(/^\d+\s+/, '').replace(/\s+/g, ' ').trim().toUpperCase();
-      if (!nomeVisitante || nomeVisitante.length < 4) continue;
-
-      const vinculo = (row.vinculo || 'Não Identificado').replace(/\s+/g, ' ').trim();
-
-      resultado.push({
-        matricula_preso:            currentMatricula,
-        nome_preso:                 currentNomePreso,
-        nome_visitante:             nomeVisitante,
-        nome_visitante_normalizado: norm(nomeVisitante),
-        vinculo,
-        periodo_ref:                mesRef,
-        prontuario_visitante:       prontuarioVisitante,
-      });
-    }
-
-    console.log(`[8.13 Parser] ${resultado.length} vínculos extraídos`);
-    if (resultado.length > 0) console.log('[8.13 Parser] Exemplo[0]:', resultado[0]);
-
-    return resultado;
-  };
-
-  // -------------------------------------------------------
-  // Upload e processamento
+  // Upload e processamento — usa parsear813 de ipenParsers.js
+  // para garantir extração idêntica à sincronização diária.
   // -------------------------------------------------------
   const handleFileUpload = async (event) => {
     if (!mesRef) {
@@ -244,12 +66,12 @@ const AnalisarIPENModal = ({ onComplete, mesesDisponiveis = [] }) => {
     setStats(null);
 
     try {
-      // 1. Extrai itens com coordenadas
-      const allItems = await extractItems(file);
+      // 1. Extrai itens com coordenadas (X, Y, página)
+      const allItems = await extractItemsFromPDF(file);
       console.log(`[AnalisarIPENModal] ${allItems.length} itens extraídos`);
 
-      // 2. Parse do 8.13
-      const registrosRaw = parseParentescoPDF(allItems);
+      // 2. Parse do 8.13 usando o parser canônico de ipenParsers.js
+      const registrosRaw = parsear813(allItems, mesRef);
 
       if (registrosRaw.length === 0) {
         throw new Error(
@@ -257,11 +79,10 @@ const AnalisarIPENModal = ({ onComplete, mesesDisponiveis = [] }) => {
         );
       }
 
-      // 3. Deduplicar registros baseados na chave única do banco (matricula_preso + nome_visitante_normalizado)
-      // O Supabase rejeita upsert se o mesmo payload contiver a mesma chave única duas vezes (ON CONFLICT DO UPDATE cannot affect row a second time)
+      // 3. Deduplicar (chave: matricula_preso + nome_visitante_normalizado)
       const registros = [];
       const keysSeen = new Set();
-      
+
       for (const reg of registrosRaw) {
         const uniqueKey = `${reg.matricula_preso}_${reg.nome_visitante_normalizado}`;
         if (!keysSeen.has(uniqueKey)) {
@@ -272,8 +93,7 @@ const AnalisarIPENModal = ({ onComplete, mesesDisponiveis = [] }) => {
 
       console.log(`[AnalisarIPENModal] ${registrosRaw.length} originais -> ${registros.length} deduplicados`);
 
-      // 4. Upsert em lotes (mantém histórico, atualiza vínculos desatualizados)
-      //    Conflito em (matricula_preso, nome_visitante_normalizado, periodo_ref) → atualiza vínculo
+      // 4. Upsert em lotes — conflito em (matricula_preso, nome_visitante_normalizado, periodo_ref)
       const batchSize = 500;
       let upsertados = 0;
       for (let i = 0; i < registros.length; i += batchSize) {
@@ -288,10 +108,7 @@ const AnalisarIPENModal = ({ onComplete, mesesDisponiveis = [] }) => {
         upsertados += batch.length;
       }
 
-      setStats({
-        total: registros.length,
-        upsertados,
-      });
+      setStats({ total: registros.length, upsertados });
 
       toast({
         title: 'Parentescos Importados!',

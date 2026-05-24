@@ -276,13 +276,14 @@ const FAQPage = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
           <div className="bg-white border p-4 rounded-xl shadow-sm">
             <p className="font-bold text-[#2D5016] uppercase text-xs tracking-wider mb-1">Setor Social</p>
-            <p className="text-lg font-black">(49) 3289-8484</p>
+            <p className="text-lg font-black"><strong>Somente WhatsApp:</strong> por mensagens de texto.</p>
             <p className="text-xs text-gray-500">Atendimento: 10h às 17h</p>
-            <p className="mt-2 text-sm"><strong>WhatsApp:</strong> (49) 3289-8495</p>
+            <p className="mt-2 text-sm">(49) 3289-8495</p>
           </div>
           <div className="space-y-4">
             <div className="bg-white border p-4 rounded-xl shadow-sm">
               <p className="font-bold text-[#2D5016] uppercase text-xs tracking-wider mb-1">Setor de Saúde</p>
+              <p className="text-xs text-gray-500">Somente por whatsapp através de mensagens de texto.</p>
               <p className="text-lg font-black">(49) 3289-8475</p>
             </div>
             <div className="bg-white border p-4 rounded-xl shadow-sm">
@@ -415,7 +416,7 @@ const FAQPage = () => {
             <li><strong>Blusa:</strong> De moletom, na cor branca ou cinza claro.</li>
             <li><strong>Calça:</strong> De moletom ou tactel, na cor cinza claro.</li>
             <li><strong>Meias:</strong> Na cor branca.</li>
-            <li><strong>Calçado:</strong> Sandália de borracha com solado baixo e flexível, em qualquer cor clara (exceto branca e laranja)(TIPO HAVAIANAS). Não pode conter fivela, tachas, enfeites ou peças metálicas.</li>
+            <li><strong>Calçado:</strong> Sandália de borracha com solado baixo e flexível, em qualquer cor clara (exceto branca e laranja) (TIPO HAVAIANAS). Não pode conter fivela, tachas, enfeites ou peças metálicas.</li>
           </ul>
 
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-xs text-gray-600 italic">

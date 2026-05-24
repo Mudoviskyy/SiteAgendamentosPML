@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,8 +15,23 @@ const ExcluirContaModal = ({ isOpen, onClose }) => {
   const [confirmText, setConfirmText] = useState('');
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1); // 1 = aviso, 2 = confirmação com senha
+  const [readTimer, setReadTimer] = useState(30); // 30s mandatory reading on step 1
 
   const CONFIRM_PHRASE = 'EXCLUIR MINHA CONTA';
+
+  // Reset & start 30s timer whenever modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    setReadTimer(30);
+    setStep(1);
+    const interval = setInterval(() => {
+      setReadTimer((prev) => {
+        if (prev <= 1) { clearInterval(interval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isOpen]);
 
   const handleClose = () => {
     if (loading) return;
@@ -169,6 +184,18 @@ const ExcluirContaModal = ({ isOpen, onClose }) => {
                 </p>
               </div>
 
+              {/* 30s reading timer indicator */}
+              {readTimer > 0 && (
+                <div className="flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-slate-50 border border-slate-200">
+                  <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-red-100 text-red-600 font-black text-sm tabular-nums">
+                    {readTimer}
+                  </span>
+                  <p className="text-xs text-slate-500">
+                    Leia com atenção antes de continuar
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-3 pt-1">
                 <button
                   onClick={handleClose}
@@ -178,9 +205,10 @@ const ExcluirContaModal = ({ isOpen, onClose }) => {
                 </button>
                 <button
                   onClick={() => setStep(2)}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 transition-colors"
+                  disabled={readTimer > 0}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Continuar
+                  {readTimer > 0 ? `Continuar (${readTimer}s)` : 'Continuar'}
                 </button>
               </div>
             </>

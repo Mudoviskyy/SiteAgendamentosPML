@@ -245,12 +245,11 @@ const RelatoriosAdmin = () => {
           const nomeNorm = norm(item.visitante1_nome);
           const keyLookup = `${item.matricula_preso}_${nomeNorm}`;
           const prontuarioOficial = prontuarioMap.get(keyLookup);
-          
-          // Se não tiver no IPEN, usa o que o visitante preencheu no cadastro
-          const prontuarioExibir = prontuarioOficial || item.visitante1_carteirinha || "";
-          const visitanteComProntuario = prontuarioExibir 
-            ? `${item.visitante1_nome?.toUpperCase()} (${prontuarioExibir})`
-            : item.visitante1_nome?.toUpperCase() || "-";
+
+          // Exibe prontuário IPEN (4-6 dígitos) ou "(sem prontuário)" — nunca usa CPF/carteirinha
+          const visitanteComProntuario = prontuarioOficial
+            ? `${item.visitante1_nome?.toUpperCase()} (${prontuarioOficial})`
+            : `${item.visitante1_nome?.toUpperCase() || "-"} (sem prontuário)`;
           
           return {
             "DATA E HORA": `${dataFormatada} ${horario}`,

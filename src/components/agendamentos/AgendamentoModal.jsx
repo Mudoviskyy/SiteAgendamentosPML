@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Calendar as CalendarIcon, Clock, Users, ChevronRight, ChevronLeft, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,8 +34,10 @@ const steps = [
 const AgendamentoModal = ({ onSuccess }) => {
   const { user, profile } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const [currentStep, setCurrentStep] = useState(1);
+  const [timeLeft, setTimeLeft] = useState(300); // 5 minutos em segundos
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -47,6 +50,8 @@ const AgendamentoModal = ({ onSuccess }) => {
   const [verificandoCarteirinha, setVerificandoCarteirinha] = useState(true);
   const [meusPresos, setMeusPresos] = useState([]);
   const [meusMenores, setMeusMenores] = useState([]);
+  const [menor2Selecionado, setMenor2Selecionado] = useState(false);
+  const [menor3Selecionado, setMenor3Selecionado] = useState(false);
   const [bloqueioIntima, setBloqueioIntima] = useState(false);
   const [bloqueioComportamento, setBloqueioComportamento] = useState(false);
   const [verificandoIngresso, setVerificandoIngresso] = useState(false);
@@ -238,6 +243,42 @@ const AgendamentoModal = ({ onSuccess }) => {
 
     verificarIngresso();
   }, [formData.matricula_preso, formData.data_visita, formData.tipo_visita, currentStep]);
+
+  // Helper to format remaining time
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Handle action when timer runs out
+  const handleTimeout = () => {
+    toast({
+      title: "Tempo Limite Excedido",
+      description: "O tempo de 5 minutos para concluir o agendamento expirou. O processo foi resetado.",
+      className: "bg-red-500 text-white border-none shadow-lg font-bold",
+      duration: 6000
+    });
+    navigate('/painel');
+  };
+
+  // Timer Effect
+  useEffect(() => {
+    if (carteirinhaValida !== true || verificandoCarteirinha) return;
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          handleTimeout();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [carteirinhaValida, verificandoCarteirinha]);
 
   const handleNext = () => {
     if (currentStep === 1 && (!formData.tipo_visita || !formData.galeria)) {
@@ -484,7 +525,20 @@ const AgendamentoModal = ({ onSuccess }) => {
     <div className="w-full max-w-4xl mx-auto bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
       {/* Header / Progress */}
       <div className="bg-gray-50 border-b border-gray-200 p-6">
-        <h2 className="text-xl font-bold text-gray-800 mb-4">Nova Solicitação de Visita</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <h2 className="text-xl font-bold text-gray-800">Nova Solicitação de Visita</h2>
+          {carteirinhaValida === true && !verificandoCarteirinha && (
+            <div className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm font-bold shadow-sm transition-all
+              ${timeLeft <= 60
+                ? 'bg-red-50 text-red-700 border-red-200 animate-pulse'
+                : 'bg-[#2D5016]/10 text-[#2D5016] border-[#2D5016]/20'
+              }`}
+            >
+              <Clock className={`w-4 h-4 ${timeLeft <= 60 ? 'text-red-600' : 'text-[#2D5016]'}`} />
+              <span>Tempo restante: {formatTime(timeLeft)}</span>
+            </div>
+          )}
+        </div>
         <div className="flex items-center justify-between relative">
           <div className="absolute left-0 top-1/2 w-full h-1 bg-gray-200 -z-0"></div>
           {steps.map((step) => (
@@ -711,35 +765,35 @@ const AgendamentoModal = ({ onSuccess }) => {
                       <Label htmlFor="seletor_preso">Selecione o Interno que irá visitar *</Label>
                       <div className="relative">
                         <Select
-                        onValueChange={(val) => {
-                          const preso = meusPresos.find(p => p.id === val);
-                          if (preso) {
-                            setFormData(prev => ({
-                              ...prev,
-                              carteirinha_id: preso.id, // Armazenamos o ID da carteirinha selecionada
-                              nome_preso: preso.nome_apenado,
-                              matricula_preso: preso.matricula_preso || ''
-                            }));
-                          }
-                        }}
-                        value={formData.carteirinha_id}
-                      >
-                        <SelectTrigger className="w-full border-gray-300 focus:border-[#2D5016] focus:ring-[#2D5016] text-gray-900 bg-white">
-                          <SelectValue placeholder="Escolha um interno..." />
-                        </SelectTrigger>
-                        <SelectContent className="bg-white">
-                          {meusPresos.map((preso) => (
-                            <SelectItem key={preso.id} value={preso.id}>
-                              {preso.nome_apenado} {preso.matricula_preso ? `(${preso.matricula_preso})` : '(PENDENTE REGISTRO)'}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {verificandoIngresso && (
-                        <div className="absolute right-10 top-1/2 -translate-y-1/2">
-                          <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-                        </div>
-                      )}
+                          onValueChange={(val) => {
+                            const preso = meusPresos.find(p => p.id === val);
+                            if (preso) {
+                              setFormData(prev => ({
+                                ...prev,
+                                carteirinha_id: preso.id, // Armazenamos o ID da carteirinha selecionada
+                                nome_preso: preso.nome_apenado,
+                                matricula_preso: preso.matricula_preso || ''
+                              }));
+                            }
+                          }}
+                          value={formData.carteirinha_id}
+                        >
+                          <SelectTrigger className="w-full border-gray-300 focus:border-[#2D5016] focus:ring-[#2D5016] text-gray-900 bg-white">
+                            <SelectValue placeholder="Escolha um interno..." />
+                          </SelectTrigger>
+                          <SelectContent className="bg-white">
+                            {meusPresos.map((preso) => (
+                              <SelectItem key={preso.id} value={preso.id}>
+                                {preso.nome_apenado} {preso.matricula_preso ? `(${preso.matricula_preso})` : '(PENDENTE REGISTRO)'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {verificandoIngresso && (
+                          <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                            <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                          </div>
+                        )}
                       </div>
 
                       {!meusPresos.find(p => p.id === formData.carteirinha_id)?.matricula_preso && formData.carteirinha_id && (
@@ -824,14 +878,14 @@ const AgendamentoModal = ({ onSuccess }) => {
                       {/* VISITANTE 2 */}
                       <div className="mb-4 space-y-3">
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Visitante 2</p>
-                        
+
                         {/* Dropdown menor para Visitante 2 */}
                         {(() => {
-                          const menoresFiltrados = meusMenores.filter(m => 
-                            m.matricula_preso && formData.matricula_preso && 
+                          const menoresFiltrados = meusMenores.filter(m =>
+                            m.matricula_preso && formData.matricula_preso &&
                             m.matricula_preso === formData.matricula_preso
                           );
-                          return menoresFiltrados.length > 0 && (
+                          return menoresFiltrados.length > 0 && !menor2Selecionado && (
                             <div className="p-3 bg-pink-50 rounded-lg border border-pink-200 mb-2">
                               <Label className="text-[10px] font-bold text-pink-800 uppercase mb-1.5 block">
                                 Selecionar menor vinculado a {formData.nome_preso || 'este interno'}
@@ -842,6 +896,7 @@ const AgendamentoModal = ({ onSuccess }) => {
                                   if (!menor) return;
                                   const numCarteirinha = (menor.protocolo || '').replace(/\D/g, '').slice(0, 6);
                                   setFormData(prev => ({ ...prev, visitante2_nome: menor.nome_menor, visitante2_carteirinha: numCarteirinha }));
+                                  setMenor2Selecionado(true);
                                 }}
                               >
                                 <SelectTrigger className="w-full border-pink-200 bg-white text-gray-900">
@@ -863,10 +918,11 @@ const AgendamentoModal = ({ onSuccess }) => {
                           <Input
                             placeholder="Nome do Visitante 2"
                             value={formData.visitante2_nome}
-                            onChange={(e) => setFormData({
+                            readOnly={menor2Selecionado}
+                            onChange={(e) => !menor2Selecionado && setFormData({
                               ...formData, visitante2_nome: e.target.value
                             })}
-                            className="border-gray-300 focus:border-[#2D5016] focus:ring-[#2D5016] text-gray-900 bg-white"
+                            className={`text-gray-900 border-gray-300 ${menor2Selecionado ? 'bg-gray-100 cursor-not-allowed' : 'bg-white focus:border-[#2D5016] focus:ring-[#2D5016]'}`}
                           />
                           <Input
                             type="text"
@@ -874,29 +930,43 @@ const AgendamentoModal = ({ onSuccess }) => {
                             inputMode="numeric"
                             maxLength={6}
                             value={formData.visitante2_carteirinha}
+                            readOnly={menor2Selecionado}
                             onChange={(e) => {
+                              if (menor2Selecionado) return;
                               const somenteNumeros = e.target.value.replace(/\D/g, '');
                               setFormData(prev => ({
                                 ...prev,
                                 visitante2_carteirinha: somenteNumeros
                               }));
                             }}
-                            className="border-gray-300 focus:border-[#2D5016] focus:ring-[#2D5016] text-gray-900 bg-white"
+                            className={`text-gray-900 border-gray-300 ${menor2Selecionado ? 'bg-gray-100 cursor-not-allowed' : 'bg-white focus:border-[#2D5016] focus:ring-[#2D5016]'}`}
                           />
                         </div>
+                        {menor2Selecionado && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMenor2Selecionado(false);
+                              setFormData(prev => ({ ...prev, visitante2_nome: '', visitante2_carteirinha: '' }));
+                            }}
+                            className="text-[11px] text-pink-700 underline hover:text-pink-900 transition-colors mt-1"
+                          >
+                            ✕ Limpar Visitante 2
+                          </button>
+                        )}
                       </div>
 
                       {/* VISITANTE 3 */}
                       <div className="mb-2 space-y-3">
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Visitante 3</p>
-                        
+
                         {/* Dropdown menor para Visitante 3 */}
                         {(() => {
-                          const menoresFiltrados = meusMenores.filter(m => 
-                            m.matricula_preso && formData.matricula_preso && 
+                          const menoresFiltrados = meusMenores.filter(m =>
+                            m.matricula_preso && formData.matricula_preso &&
                             m.matricula_preso === formData.matricula_preso
                           );
-                          return menoresFiltrados.length > 0 && (
+                          return menoresFiltrados.length > 0 && !menor3Selecionado && (
                             <div className="p-3 bg-pink-50 rounded-lg border border-pink-200 mb-2">
                               <Label className="text-[10px] font-bold text-pink-800 uppercase mb-1.5 block">
                                 Selecionar menor vinculado a {formData.nome_preso || 'este interno'}
@@ -907,6 +977,7 @@ const AgendamentoModal = ({ onSuccess }) => {
                                   if (!menor) return;
                                   const numCarteirinha = (menor.protocolo || '').replace(/\D/g, '').slice(0, 6);
                                   setFormData(prev => ({ ...prev, visitante3_nome: menor.nome_menor, visitante3_carteirinha: numCarteirinha }));
+                                  setMenor3Selecionado(true);
                                 }}
                               >
                                 <SelectTrigger className="w-full border-pink-200 bg-white text-gray-900">
@@ -928,13 +999,15 @@ const AgendamentoModal = ({ onSuccess }) => {
                           <Input
                             placeholder="Nome do Visitante 3"
                             value={formData.visitante3_nome}
-                            onChange={(e) =>
+                            readOnly={menor3Selecionado}
+                            onChange={(e) => {
+                              if (menor3Selecionado) return;
                               setFormData(prev => ({
                                 ...prev,
                                 visitante3_nome: e.target.value
-                              }))
-                            }
-                            className="border-gray-300 focus:border-[#2D5016] focus:ring-[#2D5016] text-gray-900 bg-white"
+                              }));
+                            }}
+                            className={`text-gray-900 border-gray-300 ${menor3Selecionado ? 'bg-gray-100 cursor-not-allowed' : 'bg-white focus:border-[#2D5016] focus:ring-[#2D5016]'}`}
                           />
                           <Input
                             type="text"
@@ -942,16 +1015,30 @@ const AgendamentoModal = ({ onSuccess }) => {
                             inputMode="numeric"
                             maxLength={6}
                             value={formData.visitante3_carteirinha}
+                            readOnly={menor3Selecionado}
                             onChange={(e) => {
+                              if (menor3Selecionado) return;
                               const somenteNumeros = e.target.value.replace(/\D/g, '');
                               setFormData(prev => ({
                                 ...prev,
                                 visitante3_carteirinha: somenteNumeros
                               }));
                             }}
-                            className="border-gray-300 focus:border-[#2D5016] focus:ring-[#2D5016] text-gray-900 bg-white"
+                            className={`text-gray-900 border-gray-300 ${menor3Selecionado ? 'bg-gray-100 cursor-not-allowed' : 'bg-white focus:border-[#2D5016] focus:ring-[#2D5016]'}`}
                           />
                         </div>
+                        {menor3Selecionado && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMenor3Selecionado(false);
+                              setFormData(prev => ({ ...prev, visitante3_nome: '', visitante3_carteirinha: '' }));
+                            }}
+                            className="text-[11px] text-pink-700 underline hover:text-pink-900 transition-colors mt-1"
+                          >
+                            ✕ Limpar Visitante 3
+                          </button>
+                        )}
                       </div>
 
                       <p className="text-[10px] text-gray-400 mt-2 italic">

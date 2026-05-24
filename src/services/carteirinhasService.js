@@ -132,7 +132,7 @@ export const carteirinhasService = {
         status: 'pendente',
         data_emissao: dataEmissao,
         matricula_preso: dados.matricula_preso,
-        possui_carteirinha: String(dados.possui_carteirinha)
+        possui_carteirinha: dados.possui_carteirinha != null ? String(dados.possui_carteirinha) : null,
       };
 
       // Dados de menor de idade

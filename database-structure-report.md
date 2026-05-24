@@ -106,6 +106,7 @@ Armazena referências para os documentos enviados anexos à solicitação da car
   - `carteirinha_id` (uuid) NOT NULL - Ref: `carteirinhas(id)`
   - `nome_arquivo` (text)
   - `url` (text) NOT NULL
+  - `tipo_documento` (text) - Restrito pela constraint `chk_tipo_documento` (foto_3x4, documento_oficial_com_cpf, rg_frente, rg_verso, certidao_casamento, comprovante_residencia, declaracao_residencia, declaracao_vacina, carteirinha_oficial, comprovante_parentesco, certidao_nascimento, documento_autorizacao_legal, documento_oficial_menor, responsavel_rg_frente, responsavel_rg_verso, menor_rg_frente, menor_rg_verso)
   - `created_at` (timestamp with time zone)
 
 ---

@@ -109,33 +109,25 @@ const PerfilTab = ({
       </Card>
 
       {/* ===== DANGER ZONE ===== */}
-      <div className="rounded-2xl border-2 border-red-200 bg-red-50/50 overflow-hidden">
-        <div className="flex items-center gap-3 px-8 py-5 border-b border-red-200 bg-red-50">
-          <div className="bg-red-100 p-2 rounded-xl">
-            <ShieldAlert className="w-4 h-4 text-red-600" />
-          </div>
-          <div>
-            <h3 className="text-sm font-black text-red-700 uppercase tracking-widest">Zona de Perigo</h3>
-            <p className="text-[11px] text-red-500 font-medium">Ações irreversíveis relativas à sua conta</p>
-          </div>
+      <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-0.5">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+            <ShieldAlert className="w-3.5 h-3.5 text-slate-400" />
+            Zona de Perigo
+          </h4>
+          <p className="text-xs text-slate-500">
+            Ações irreversíveis relativas à sua conta.
+          </p>
         </div>
-        <div className="px-8 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="space-y-1 max-w-md">
-            <p className="text-sm font-bold text-red-800">Excluir minha conta</p>
-            <p className="text-[13px] text-red-600 leading-relaxed">
-              Remove permanentemente seu acesso, documentos enviados e carteirinhas ativas.
-              Registros históricos de visitas são mantidos conforme a LGPD (Art. 16).
-            </p>
-          </div>
-          <button
-            id="btn-excluir-conta"
-            onClick={() => setShowExcluirModal(true)}
-            className="flex-shrink-0 flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black text-xs uppercase tracking-widest rounded-xl transition-all shadow-sm hover:shadow-md"
-          >
-            <Trash2 className="w-4 h-4" />
-            Excluir Minha Conta
-          </button>
-        </div>
+        <Button
+          variant="outline"
+          id="btn-excluir-conta"
+          onClick={() => setShowExcluirModal(true)}
+          className="h-9 px-4 text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 text-xs font-bold uppercase tracking-widest"
+        >
+          <Trash2 className="w-3.5 h-3.5 mr-2" />
+          Excluir Conta
+        </Button>
       </div>
 
       <ExcluirContaModal
