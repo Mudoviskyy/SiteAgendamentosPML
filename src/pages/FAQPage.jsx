@@ -36,6 +36,34 @@ const FAQPage = () => {
       )
     },
     {
+      question: "Qual a finalidade desse sistema?",
+      answer: (
+        <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+          <p>
+            O portal foi criado <strong>única e exclusivamente</strong> para uso de visitantes (familiares ou amigos que tenham algum parente ou amigo em situação de privação de liberdade), em cumprimento da{' '}
+            <strong className="text-[#2D5016]">Portaria 2189.2025 – PROCEDIMENTOS OPERACIONAIS – DPP</strong>.
+          </p>
+          <p>
+            Qualquer outra finalidade dada ao sistema estará <strong>violando a portaria regulamentar</strong>.
+          </p>
+          <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg mt-2 text-amber-800 text-xs">
+            <strong>Portaria Oficial:</strong> O documento completo com as regras operacionais pode ser consultado no link oficial da SEJURI/SC:{' '}
+            <a
+              href="https://sejuri.sc.gov.br/download/portaria-2189-2025-procedimentos-operacionais-dpp/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[#2D5016] font-bold hover:underline break-all"
+            >
+              https://sejuri.sc.gov.br/download/portaria-2189-2025-procedimentos-operacionais-dpp/
+            </a>
+          </div>
+          <p className="text-xs text-gray-500 pt-2 border-t border-gray-100">
+            <strong>Dúvidas sobre regras internas:</strong> Em caso de dúvidas ou para obter mais detalhes sobre as regras internas do Presídio Masculino de Lages, a equipe de suporte sugere o contato direto com o <strong>Setor Social</strong> ou com a <strong>Direção</strong> da unidade.
+          </p>
+        </div>
+      )
+    },
+    {
       question: "Quem pode encaminhar a carteirinha de visitação?",
       answer: (
         <div className="space-y-3 text-sm text-gray-700 leading-relaxed">

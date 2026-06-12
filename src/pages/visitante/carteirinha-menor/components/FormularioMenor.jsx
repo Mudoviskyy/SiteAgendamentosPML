@@ -26,14 +26,27 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
   const [tipoIdentificacao, setTipoIdentificacao] = useState(TIPOS_IDENTIFICACAO.CPF);
   const [documentoValor, setDocumentoValor] = useState("");
 
-  const [formData, setFormData] = useState({
+  const getInitialState = (key, defaultValue) => {
+    try {
+      const stored = sessionStorage.getItem('solicitacao_menor_form');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed[key] !== undefined) return parsed[key];
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return defaultValue;
+  };
+
+  const [formData, setFormData] = useState(() => getInitialState('formData', {
     nome_menor: '',
     cpf_menor: '',
     parentesco: '',
     nome_apenado: '',
     matricula_preso: '',
     prontuario_menor: '',
-  });
+  }));
 
   const [documentos, setDocumentos] = useState({
     foto_3x4: null,
@@ -47,8 +60,17 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
     carteirinha_oficial: null,
   });
 
-  const [dataEmissao, setDataEmissao] = useState({ dia: '', mes: '', ano: '' });
-  const [dataNascimento, setDataNascimento] = useState({ dia: '', mes: '', ano: '' });
+  const [dataEmissao, setDataEmissao] = useState(() => getInitialState('dataEmissao', { dia: '', mes: '', ano: '' }));
+  const [dataNascimento, setDataNascimento] = useState(() => getInitialState('dataNascimento', { dia: '', mes: '', ano: '' }));
+
+  useEffect(() => {
+    const saved = {
+      formData,
+      dataEmissao,
+      dataNascimento
+    };
+    sessionStorage.setItem('solicitacao_menor_form', JSON.stringify(saved));
+  }, [formData, dataEmissao, dataNascimento]);
 
   const dias = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, "0"));
   const meses = [
@@ -177,6 +199,8 @@ const FormularioMenor = ({ user, profile, carteirinhasAprovadas, fluxoAtivo, set
 
       if (success) {
         toast({ title: "Solicitação Enviada!", description: `Protocolo: ${protocol}`, className: "bg-green-600 text-white" });
+        sessionStorage.removeItem('solicitacao_menor_form');
+        sessionStorage.removeItem('solicitacao_menor_fluxo');
         setTimeout(() => navigate('/painel'), 2000);
       }
     } catch (error) {

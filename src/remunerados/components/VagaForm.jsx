@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const VagaForm = ({ initialData, onSubmit, onCancel, loading }) => {
   const { toast } = useToast();
@@ -12,12 +13,16 @@ const VagaForm = ({ initialData, onSubmit, onCancel, loading }) => {
     data: '',
     tipo: 'RD',
     vagas_totais: 1,
+    ativa: true,
     ...initialData
   });
 
   useEffect(() => {
     if (initialData) {
-      setFormData(initialData);
+      setFormData({
+        ativa: true, // valor padrão
+        ...initialData
+      });
     }
   }, [initialData]);
 
@@ -29,15 +34,16 @@ const VagaForm = ({ initialData, onSubmit, onCancel, loading }) => {
       return;
     }
     
-    if (formData.vagas_totais <= 0) {
-      toast({ title: "Erro", description: "A quantidade de vagas deve ser maior que zero.", variant: "destructive" });
+    if (parseInt(formData.vagas_totais, 10) < 0) {
+      toast({ title: "Erro", description: "A quantidade de vagas não pode ser negativa.", variant: "destructive" });
       return;
     }
 
     onSubmit({
       data: formData.data,
       tipo: formData.tipo,
-      vagas_totais: parseInt(formData.vagas_totais, 10)
+      vagas_totais: parseInt(formData.vagas_totais, 10),
+      ativa: formData.ativa !== false
     });
   };
 
@@ -71,12 +77,24 @@ const VagaForm = ({ initialData, onSubmit, onCancel, loading }) => {
         <Label>Capacidade de Vagas</Label>
         <Input 
           type="number" 
-          min="1" 
+          min="0" 
           required 
           value={formData.vagas_totais} 
           onChange={(e) => setFormData({...formData, vagas_totais: e.target.value})} 
           disabled={loading}
         />
+      </div>
+
+      <div className="flex items-center space-x-2 pt-2 pb-1">
+        <Checkbox 
+          id="ativa" 
+          checked={formData.ativa !== false} 
+          onChange={(e) => setFormData({...formData, ativa: e.target.checked})}
+          disabled={loading}
+        />
+        <Label htmlFor="ativa" className="cursor-pointer font-medium text-sm text-gray-700 select-none">
+          Turno Ativo (servidores podem solicitar)
+        </Label>
       </div>
 
       <div className="flex justify-end space-x-2 pt-4">
@@ -92,3 +110,4 @@ const VagaForm = ({ initialData, onSubmit, onCancel, loading }) => {
 };
 
 export default VagaForm;
+

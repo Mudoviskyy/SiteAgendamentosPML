@@ -2,7 +2,7 @@
 import React from 'react';
 import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
-import { ShieldCheck, ArrowLeft, Lock, Eye, UserCheck } from 'lucide-react';
+import { ShieldCheck, ArrowLeft, Lock, Eye, UserCheck, AlertTriangle, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -73,6 +73,39 @@ const PoliticaPrivacidade = () => {
               
               <CardContent className="p-10 space-y-10 text-gray-700 leading-relaxed">
                 
+                {/* Seção Especial - Aviso de Finalidade (Portaria 2189.2025) */}
+                <div className="bg-amber-50 border border-amber-200 p-6 rounded-2xl text-amber-950 text-sm md:text-base space-y-3 shadow-inner">
+                  <div className="flex items-center gap-3 text-amber-800">
+                    <div className="p-2 bg-amber-100 rounded-lg">
+                      <AlertTriangle className="w-6 h-6 shrink-0" />
+                    </div>
+                    <h3 className="font-black uppercase tracking-tight text-base md:text-lg">
+                      Nota de Aviso: Finalidade do Sistema
+                    </h3>
+                  </div>
+                  <p className="leading-relaxed">
+                    O sistema foi criado <strong>única e exclusivamente</strong> para o uso de visitantes (familiares ou amigos que tenham algum parente ou amigo em situação de privação de liberdade), em estrito cumprimento da{' '}
+                    <strong className="text-amber-900">Portaria 2189.2025 – PROCEDIMENTOS OPERACIONAIS – DPP</strong>.
+                  </p>
+                  <p className="leading-relaxed">
+                    Qualquer outra finalidade dada ao uso deste portal estará <strong>violando tal portaria</strong>.
+                  </p>
+                  <div className="pt-2">
+                    <a
+                      href="https://sejuri.sc.gov.br/download/portaria-2189-2025-procedimentos-operacionais-dpp/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-bold px-4 py-2 rounded-xl text-xs md:text-sm transition-all shadow-sm"
+                    >
+                      <span>Acessar Portaria Oficial 2189.2025</span>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                  <p className="text-xs text-amber-800 leading-relaxed pt-2 border-t border-amber-200/60">
+                    <strong>Dúvidas ou Informações:</strong> Em caso de dúvidas referentes às regras internas do Presídio Masculino de Lages, a equipe de suporte sugere o contato direto com o setor social ou com a Direção da unidade.
+                  </p>
+                </div>
+
                 {/* 1. Introdução */}
                 <section>
                   <h2 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2 uppercase tracking-tight">

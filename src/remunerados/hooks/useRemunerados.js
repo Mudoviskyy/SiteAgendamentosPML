@@ -45,18 +45,25 @@ export const useRemunerados = () => {
   const cancelarServicoServidor = useCallback(async (agendamentoId) => {
     setLoading(true);
     try {
-      const { error } = await supabase
+      const { data: deleted, error } = await supabase
         .from('agendamentos_remunerados')
         .delete()
         .eq('id', agendamentoId)
-        .eq('status', 'pendente');
+        .eq('status', 'pendente')
+        .select();
 
       if (error) throw error;
+
+      // RLS pode bloquear silenciosamente sem lançar erro — verifica se deletou de fato
+      if (!deleted || deleted.length === 0) {
+        throw new Error('Não foi possível cancelar. O agendamento pode não estar mais pendente ou você não tem permissão.');
+      }
+
       toast({ title: "Cancelado", description: "Seu agendamento pendente foi cancelado." });
       return { success: true };
     } catch (err) {
       console.error("Erro ao cancelar servico:", err);
-      toast({ variant: "destructive", title: "Erro", description: "Não foi possível cancelar o agendamento." });
+      toast({ variant: "destructive", title: "Erro", description: err.message || "Não foi possível cancelar o agendamento." });
       return { success: false, error: err.message };
     } finally {
       setLoading(false);

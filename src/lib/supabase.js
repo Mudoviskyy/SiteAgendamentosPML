@@ -28,8 +28,10 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 // Custom fetch to handle connection timeouts/overloads globally
 const customFetch = async (url, options = {}) => {
+  const isStorage = url.includes('/storage/');
+  const timeoutMs = isStorage ? 90000 : 15000; // 90 segundos para storage (uploads/downloads), 15 segundos para consultas normais
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos de timeout
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(url, {

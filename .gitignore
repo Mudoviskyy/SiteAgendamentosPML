@@ -73,3 +73,5 @@ regex_test.js
 src/components/admin/relacao preso/
 supabase/.temp/
 
+# Business Strategy Files
+venda_ao_estado.md

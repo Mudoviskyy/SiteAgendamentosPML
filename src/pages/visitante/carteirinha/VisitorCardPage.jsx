@@ -5,7 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { verificarCarteirinhaStatus } from "@/services/agendamentosService";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 
 import AvisosIniciais from "./components/AvisosIniciais";
@@ -14,6 +14,7 @@ import FormularioSolicitacao from "./components/FormularioSolicitacao";
 const VisitorCardPage = () => {
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
 
   const [checkingCard, setCheckingCard] = useState(true);
@@ -30,8 +31,10 @@ const VisitorCardPage = () => {
   const [openExampleVacina, setOpenExampleVacina] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !user) navigate("/login");
-  }, [user, authLoading, navigate]);
+    if (!authLoading && !user) {
+      navigate("/login", { state: { from: location }, replace: true });
+    }
+  }, [user, authLoading, navigate, location]);
 
   useEffect(() => {
     if (!user?.id) {

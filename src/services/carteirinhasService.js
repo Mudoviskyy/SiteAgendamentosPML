@@ -111,7 +111,7 @@ export const carteirinhasService = {
         if (
           existente.status === 'aprovado' &&
           existente.validade &&
-          new Date(existente.validade) > new Date()
+          new Date(String(existente.validade).substring(0, 10) + 'T23:59:59') > new Date()
         ) {
           throw new Error('Você já possui uma carteirinha ativa para este interno.');
         }
@@ -594,8 +594,9 @@ export const carteirinhasService = {
             .select('validade')
             .eq('id', existente.id)
             .single();
-          if (aprovada?.validade && new Date(aprovada.validade) > new Date()) {
-            const diff = Math.ceil((new Date(aprovada.validade) - new Date()) / (1000 * 60 * 60 * 24));
+          const validadeDateStr = String(aprovada.validade).substring(0, 10);
+          if (aprovada?.validade && new Date(validadeDateStr + 'T23:59:59') > new Date()) {
+            const diff = Math.ceil((new Date(validadeDateStr + 'T00:00:00') - new Date()) / (1000 * 60 * 60 * 24));
             if (diff > 30) throw new Error(`O menor "${dados.nome_menor}" já possui carteirinha ativa. Renovação disponível 30 dias antes do vencimento (restam ${diff} dias).`);
           }
         }

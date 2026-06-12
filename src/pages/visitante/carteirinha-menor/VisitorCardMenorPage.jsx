@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -10,15 +10,31 @@ import AvisosMenor from './components/AvisosMenor';
 import FormularioMenor from './components/FormularioMenor';
 
 const VisitorCardMenorPage = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [checkingCard, setCheckingCard] = useState(true);
   const [carteirinhasAprovadas, setCarteirinhasAprovadas] = useState([]);
-  const [fluxoAtivo, setFluxoAtivo] = useState(null);
+  const [fluxoAtivo, setFluxoAtivo] = useState(() => {
+    return sessionStorage.getItem('solicitacao_menor_fluxo') || null;
+  });
 
   useEffect(() => {
-    if (!user) { navigate("/login"); return; }
+    if (fluxoAtivo) {
+      sessionStorage.setItem('solicitacao_menor_fluxo', fluxoAtivo);
+    } else {
+      sessionStorage.removeItem('solicitacao_menor_fluxo');
+    }
+  }, [fluxoAtivo]);
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/login", { state: { from: location }, replace: true });
+      return;
+    }
+    if (authLoading || !user) return;
+
     const carregarAprovadas = async () => {
       const { data } = await supabase
         .from('carteirinhas')
@@ -37,7 +53,7 @@ const VisitorCardMenorPage = () => {
       setCheckingCard(false);
     };
     carregarAprovadas();
-  }, [user, navigate]);
+  }, [user, authLoading, navigate, location]);
 
   if (checkingCard) {
     return <div className="min-h-screen flex justify-center items-center"><Loader2 className="h-8 w-8 animate-spin text-pink-600" /></div>;

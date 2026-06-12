@@ -254,6 +254,24 @@ const SincronizacaoDiariaModal = ({ open, onComplete }) => {
                       <span className="cursor-pointer">Enviar PDF {currentStepInfo.nome}</span>
                     </Button>
                   </label>
+
+                  {step === 4 && errorMsg && (
+                    <Button 
+                      variant="outline" 
+                      onClick={() => {
+                        setErrorMsg('');
+                        setStep(5);
+                        toast({
+                          title: "Passo Avançado",
+                          description: "O Relatório 8.13 foi ignorado para permitir a continuação da sincronização.",
+                        });
+                      }}
+                      className="w-full mt-2 border-amber-300 hover:bg-amber-50 text-amber-700 hover:text-amber-800 flex items-center justify-center gap-1.5"
+                    >
+                      <AlertTriangle size={14} className="text-amber-600" />
+                      Ignorar Erro e Avançar
+                    </Button>
+                  )}
                 </div>
               )}
             </div>

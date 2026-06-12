@@ -31,6 +31,7 @@ const PLANTAO_OPTIONS = [
 const RemuneradosAdminDashboard = () => {
   const { fetchDashboardMetrics, fetchServidores, updateServidor, fetchRelatorioData, loading } = useRemuneradosAdmin();
   const [metrics, setMetrics] = useState(null);
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
   const navigate = useNavigate();
 
   // Servidores state
@@ -68,11 +69,13 @@ const RemuneradosAdminDashboard = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      const res = await fetchDashboardMetrics();
+      const mes = currentCalendarDate.getMonth() + 1;
+      const ano = currentCalendarDate.getFullYear();
+      const res = await fetchDashboardMetrics(mes, ano);
       if (res.success) setMetrics(res.data);
     };
     loadData();
-  }, [fetchDashboardMetrics]);
+  }, [fetchDashboardMetrics, currentCalendarDate]);
 
   const loadServidores = async () => {
     const res = await fetchServidores();
@@ -189,13 +192,14 @@ const RemuneradosAdminDashboard = () => {
 
       {/* Seção de Métricas Principais */}
       {loading && !metrics ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 rounded-xl" />)}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-32 rounded-xl" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <MetricsCard title="Taxa de Ocupação" value={`${metrics?.occupancyRate || 0}%`} icon={Percent} colorClass="#3b82f6" />
-          <MetricsCard title="Serviços (Mês)" value={metrics?.completedServices || 0} icon={CheckCircle} colorClass="#10b981" />
+          <MetricsCard title="Total de Vagas" value={metrics?.totalVagas || 0} icon={CalendarIcon} colorClass="#2D5016" />
+          <MetricsCard title="Vagas Preenchidas" value={metrics?.completedServices || 0} icon={CheckCircle} colorClass="#10b981" />
           <MetricsCard 
             title="Ações Pendentes" 
             value={metrics?.pendingRequests || 0} 
@@ -221,7 +225,7 @@ const RemuneradosAdminDashboard = () => {
             
             {/* ESQUERDA: CALENDÁRIO (OCUPA 2/3) */}
             <div className="xl:col-span-2">
-              <CalendarioRemunerados />
+              <CalendarioRemunerados onMonthChange={setCurrentCalendarDate} />
             </div>
 
             {/* DIREITA (GRÁFICO E AÇÕES EMPILHADOS) */}

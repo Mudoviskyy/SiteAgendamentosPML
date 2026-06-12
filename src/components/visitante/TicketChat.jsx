@@ -26,7 +26,9 @@ const TicketChat = ({ ticket, user, onBack, isVisitor = true, onStatusChange }) 
   useEffect(() => {
     fetchMessages();
 
-    // Subscribe to new messages
+    // Não cria canal Realtime para tickets já encerrados
+    if (isTicketClosed) return;
+
     const channel = supabase.channel(`ticket_${ticket.id}`)
       .on('postgres_changes', {
         event: 'INSERT',
@@ -49,7 +51,7 @@ const TicketChat = ({ ticket, user, onBack, isVisitor = true, onStatusChange }) 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [ticket.id]);
+  }, [ticket.id, isTicketClosed]);
 
   useEffect(() => {
     scrollToBottom();
@@ -146,23 +148,24 @@ const TicketChat = ({ ticket, user, onBack, isVisitor = true, onStatusChange }) 
   return (
     <div className="flex flex-col h-[600px] max-h-[80vh] bg-white rounded-[24px] overflow-hidden border border-slate-200 shadow-sm relative flex-1">
       {/* Header do Chat */}
-      <div className="bg-slate-50 border-b border-slate-100 p-4 flex items-center justify-between z-10">
-        <div className="flex items-center gap-3">
+      <div className="bg-slate-50 border-b border-slate-100 p-4 flex items-center justify-between z-10 gap-4 min-w-0">
+        <div className="flex items-center gap-3 min-w-0">
           {onBack && (
-            <button onClick={onBack} className="md:hidden text-slate-400 hover:text-slate-600 mr-2">
+            <button onClick={onBack} className="md:hidden text-slate-400 hover:text-slate-600 mr-2 flex-shrink-0">
                &larr; Voltar
             </button>
           )}
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-bold text-slate-900 text-sm md:text-base">{ticket.assunto}</h3>
-              <Badge className={`${STATUS_CONFIG[ticket.status]?.color} border-none text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-md`}>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <h3 className="font-bold text-slate-900 text-sm md:text-base break-words min-w-0" title={ticket.assunto}>{ticket.assunto}</h3>
+              <Badge className={`${STATUS_CONFIG[ticket.status]?.color} border-none text-[9px] uppercase tracking-widest px-2 py-0.5 rounded-md flex-shrink-0`}>
                 {STATUS_CONFIG[ticket.status]?.label || ticket.status}
               </Badge>
             </div>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex items-center gap-1.5">
-               <span className="bg-slate-200 px-1.5 py-0.5 rounded text-slate-700">{ticket.protocolo}</span>
-               • {ticket.categoria.replace('_', ' ')}
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest flex flex-wrap items-center gap-1.5 min-w-0">
+               <span className="bg-slate-200 px-1.5 py-0.5 rounded text-slate-700 flex-shrink-0">{ticket.protocolo}</span>
+               <span className="text-slate-300">•</span>
+               <span className="break-words min-w-0">{ticket.categoria.replace('_', ' ')}</span>
             </p>
           </div>
         </div>
@@ -190,7 +193,7 @@ const TicketChat = ({ ticket, user, onBack, isVisitor = true, onStatusChange }) 
               
               return (
                 <div key={msg.id} className={`flex w-full ${isMine ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] md:max-w-[70%] flex gap-3 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
+                  <div className={`max-w-[85%] md:max-w-[70%] flex gap-3 min-w-0 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
                     
                     {/* Avatar */}
                     <div className="flex-shrink-0 mt-auto">
@@ -200,15 +203,15 @@ const TicketChat = ({ ticket, user, onBack, isVisitor = true, onStatusChange }) 
                     </div>
 
                     {/* Balão */}
-                    <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
-                      <div className={`px-5 py-3.5 rounded-2xl shadow-sm text-sm ${
+                    <div className={`flex flex-col min-w-0 ${isMine ? 'items-end' : 'items-start'}`}>
+                      <div className={`px-5 py-3.5 rounded-2xl shadow-sm text-sm w-full ${
                         isMine 
                           ? 'bg-indigo-600 text-white rounded-br-none' 
                           : msg.is_admin 
                             ? 'bg-white border border-indigo-100 rounded-bl-none text-slate-800' 
                             : 'bg-white border border-slate-100 rounded-bl-none text-slate-800'
                       }`}>
-                        <p className="whitespace-pre-wrap leading-relaxed">{msg.mensagem}</p>
+                        <p className="whitespace-pre-wrap leading-relaxed break-words [word-break:break-word]">{msg.mensagem}</p>
                       </div>
                       
                       {/* Meta da mensagem */}

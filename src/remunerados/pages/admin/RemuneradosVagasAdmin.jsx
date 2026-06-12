@@ -80,7 +80,7 @@ const RemuneradosVagasAdmin = () => {
     if (editingVaga) {
       res = await updateVaga(editingVaga.id, data);
     } else {
-      res = await createVaga({ ...data, vagas_ocupadas: 0, ativa: true });
+      res = await createVaga({ ativa: true, ...data, vagas_ocupadas: 0 });
     }
     
     if (res.success) {

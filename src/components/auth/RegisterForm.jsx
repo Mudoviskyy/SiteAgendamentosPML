@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 
 const RegisterForm = () => {
   const { register } = useAuth();
@@ -22,6 +22,8 @@ const RegisterForm = () => {
   });
   const [loading, setLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   // Ref to prevent duplicate submissions
   const submitAttemptRef = useRef(false);
@@ -156,25 +158,47 @@ const RegisterForm = () => {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">Senha</label>
-          <Input 
-            type="password" 
-            name="password" 
-            value={formData.password} 
-            onChange={handleChange} 
-            disabled={loading || isSubmitting}
-            required 
-          />
+          <div className="relative flex items-center">
+            <Input 
+              type={showPassword ? "text" : "password"} 
+              name="password" 
+              value={formData.password} 
+              onChange={handleChange} 
+              disabled={loading || isSubmitting}
+              className="pr-10"
+              required 
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 text-gray-500 hover:text-[#2D5016] transition-colors focus:outline-none"
+              disabled={loading || isSubmitting}
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">Confirmar Senha</label>
-          <Input 
-            type="password" 
-            name="confirmPassword" 
-            value={formData.confirmPassword} 
-            onChange={handleChange} 
-            disabled={loading || isSubmitting}
-            required 
-          />
+          <div className="relative flex items-center">
+            <Input 
+              type={showConfirmPassword ? "text" : "password"} 
+              name="confirmPassword" 
+              value={formData.confirmPassword} 
+              onChange={handleChange} 
+              disabled={loading || isSubmitting}
+              className="pr-10"
+              required 
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 text-gray-500 hover:text-[#2D5016] transition-colors focus:outline-none"
+              disabled={loading || isSubmitting}
+            >
+              {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
       </div>
       <Button 

@@ -93,25 +93,34 @@ const UserApproval = () => {
   useEffect(() => {
     fetchTickets();
     fetchSuspects();
+  }, [currentPage]);
 
-    // 🔴 Monitoramento Anti-Fraude em Tempo Real
+  // Canal Realtime separado: abre uma vez no mount, fecha no unmount
+  useEffect(() => {
     const channel = supabase.channel('fraude-monitor')
       .on('postgres_changes', {
-        event: '*', 
-        schema: 'public', 
+        event: 'INSERT',
+        schema: 'public',
         table: 'agendamentos',
         filter: 'status=eq.suspeito'
       }, (payload) => {
-        // Dispara o alerta quando um agendamento entrar como suspeito
         setFraudAlert(payload.new);
-        fetchSuspects(); // Atualiza a lista lateral também
+        fetchSuspects();
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'agendamentos',
+        filter: 'status=eq.suspeito'
+      }, (payload) => {
+        fetchSuspects();
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentPage]);
+  }, []);
 
   const handleCloseAlert = () => {
     if (fraudAlert) {
@@ -250,7 +259,7 @@ const UserApproval = () => {
       ) : activeTab === 'bugs' ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Lista de Reports */}
-          <div className="lg:col-span-6 space-y-4">
+          <div className={`lg:col-span-6 space-y-4 ${selectedTicket ? 'hidden lg:block' : 'block'}`}>
             {tickets.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-[32px] border border-slate-100 shadow-sm">
                 <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -293,7 +302,7 @@ const UserApproval = () => {
                         </Badge>
                       </div>
 
-                      <p className="text-slate-700 text-sm leading-relaxed font-bold mb-1">
+                      <p className="text-slate-700 text-sm leading-relaxed font-bold mb-1 break-words">
                         {ticket.assunto}
                       </p>
                       
@@ -369,8 +378,7 @@ const UserApproval = () => {
           </div>
 
           {/* Painel de Detalhes / Resposta */}
-
-          <div className="lg:col-span-6 sticky top-8">
+          <div className={`lg:col-span-6 sticky top-8 ${selectedTicket ? 'block' : 'hidden lg:block'}`}>
             {selectedTicket ? (
               <TicketChat 
                 ticket={selectedTicket} 

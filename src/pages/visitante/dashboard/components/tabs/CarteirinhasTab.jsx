@@ -10,15 +10,19 @@ import CarteirinhaDisplay from '@/components/visitante/CarteirinhaDisplay';
 const formatLocalDate = (dateString) => {
   if (!dateString) return '—';
   try {
-    const date = parseISO(dateString.includes('T') ? dateString : `${dateString}T00:00:00`);
+    // Extrai apenas YYYY-MM-DD do timestamptz UTC para evitar conversão de fuso.
+    // "2026-07-24 00:00:00+00" em UTC-3 viraria 23/07 às 21h → exibiria 23/07.
+    const datePart = String(dateString).substring(0, 10); // "2026-07-24"
+    const date = parseISO(datePart);
     return isValid(date) ? format(date, 'dd/MM/yyyy') : '—';
   } catch (e) { return '—'; }
 };
 
 const isExpired = (validade) => {
   if (!validade) return false;
-  const val = new Date(validade);
-  val.setHours(23, 59, 59, 999);
+  // Extrai apenas YYYY-MM-DD do timestamp UTC para não deslocar um dia por conta do fuso.
+  const datePart = String(validade).substring(0, 10);
+  const val = new Date(datePart + 'T23:59:59');
   return val < new Date();
 };
 

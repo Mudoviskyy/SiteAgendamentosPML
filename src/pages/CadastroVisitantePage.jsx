@@ -4,7 +4,7 @@ import { Helmet } from 'react-helmet';
 import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
-  ArrowLeft, Loader2, User, Mail, Calendar, Lock, AlertCircle, Check, X, ShieldCheck, AlertTriangle 
+  ArrowLeft, Loader2, User, Mail, Calendar, Lock, AlertCircle, Check, X, ShieldCheck, AlertTriangle, Eye, EyeOff 
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -58,6 +58,8 @@ const CadastroVisitantePage = () => {
     confirmaSenha: ''
   });
   
+  const [showSenha, setShowSenha] = useState(false);
+  const [showConfirmaSenha, setShowConfirmaSenha] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
@@ -528,8 +530,25 @@ const CadastroVisitantePage = () => {
                     <label className="text-sm font-medium leading-none flex items-center gap-2">
                       <Lock className="w-4 h-4 text-[#2D5016]" /> Senha
                     </label>
-                    <div className="relative">
-                      <Input type="password" name="senha" placeholder="••••••••" value={formData.senha} onChange={handleChange} onBlur={handleBlur} className={cn("h-11 transition-all", getInputStyles(getInputState('senha')))} disabled={loading || isSubmitting || !!successMessage} />
+                    <div className="relative flex items-center">
+                      <Input 
+                        type={showSenha ? "text" : "password"} 
+                        name="senha" 
+                        placeholder="••••••••" 
+                        value={formData.senha} 
+                        onChange={handleChange} 
+                        onBlur={handleBlur} 
+                        className={cn("h-11 transition-all pr-10", getInputStyles(getInputState('senha')))} 
+                        disabled={loading || isSubmitting || !!successMessage} 
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSenha(!showSenha)}
+                        className="absolute right-3 text-gray-500 hover:text-[#2D5016] transition-colors focus:outline-none"
+                        disabled={loading || isSubmitting || !!successMessage}
+                      >
+                        {showSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
                     {errors.senha && <span className="text-[12px] text-red-500 flex items-center gap-1 mt-1 leading-tight">{errors.senha}</span>}
                   </div>
@@ -538,8 +557,25 @@ const CadastroVisitantePage = () => {
                     <label className="text-sm font-medium leading-none flex items-center gap-2">
                       <Lock className="w-4 h-4 text-[#2D5016]" /> Confirmar Senha
                     </label>
-                    <div className="relative">
-                      <Input type="password" name="confirmaSenha" placeholder="••••••••" value={formData.confirmaSenha} onChange={handleChange} onBlur={handleBlur} className={cn("h-11 transition-all", getInputStyles(getInputState('confirmaSenha')))} disabled={loading || isSubmitting || !!successMessage} />
+                    <div className="relative flex items-center">
+                      <Input 
+                        type={showConfirmaSenha ? "text" : "password"} 
+                        name="confirmaSenha" 
+                        placeholder="••••••••" 
+                        value={formData.confirmaSenha} 
+                        onChange={handleChange} 
+                        onBlur={handleBlur} 
+                        className={cn("h-11 transition-all pr-10", getInputStyles(getInputState('confirmaSenha')))} 
+                        disabled={loading || isSubmitting || !!successMessage} 
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmaSenha(!showConfirmaSenha)}
+                        className="absolute right-3 text-gray-500 hover:text-[#2D5016] transition-colors focus:outline-none"
+                        disabled={loading || isSubmitting || !!successMessage}
+                      >
+                        {showConfirmaSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
                     </div>
                     {errors.confirmaSenha && <span className="text-[12px] text-red-500 flex items-center gap-1 mt-1">{errors.confirmaSenha}</span>}
                   </div>

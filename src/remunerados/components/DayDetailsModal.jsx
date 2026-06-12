@@ -105,7 +105,10 @@ export default function DayDetailsModal({ isOpen, onClose, dateStr, dayData, hoo
   const handleVagaSubmit = async (formData) => {
     let res;
     if (editingVaga?.id) {
-      res = await updateVaga(editingVaga.id, { vagas_totais: formData.vagas_totais });
+      res = await updateVaga(editingVaga.id, { 
+        vagas_totais: formData.vagas_totais,
+        ativa: formData.ativa !== false
+      });
     } else {
       res = await createVaga(formData);
     }
@@ -136,6 +139,11 @@ export default function DayDetailsModal({ isOpen, onClose, dateStr, dayData, hoo
               {data.vagas_ocupadas} / {data.vagas_totais}
             </span>
             <span className="text-sm text-gray-500">vagas preenchidas</span>
+            {data.id && (data.ativa === false || data.vagas_totais === 0) && (
+              <Badge className="bg-red-100 text-red-800 border-red-200 hover:bg-red-100 font-bold">
+                BLOQUEADO / INDISPONÍVEL
+              </Badge>
+            )}
             <Button 
               variant="outline" 
               size="sm" 
@@ -148,12 +156,12 @@ export default function DayDetailsModal({ isOpen, onClose, dateStr, dayData, hoo
           </div>
         </div>
         <div className="flex gap-2">
-          {data.vagas_totais > 0 && data.vagas_ocupadas < data.vagas_totais && (
+          {data.ativa !== false && data.vagas_totais > 0 && data.vagas_ocupadas < data.vagas_totais && (
             <Button size="sm" onClick={() => setAddModalOpen(true)} className="bg-[#2D5016] text-white hover:bg-[#1a330e]">
               <UserPlus className="w-4 h-4 mr-2" /> Adicionar Servidor
             </Button>
           )}
-          {data.vagas_totais === 0 && (
+          {(data.vagas_totais === 0 || !data.id) && (
              <Button size="sm" variant="outline" onClick={handleStartVagaEdit} className="text-amber-700 border-amber-200 bg-amber-50 hover:bg-amber-100">
                <PlusCircle className="w-4 h-4 mr-2" />
                Configurar Vagas

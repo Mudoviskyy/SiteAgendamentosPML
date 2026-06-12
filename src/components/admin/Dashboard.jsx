@@ -11,6 +11,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { addLog, measurePerf } from '@/utils/logger';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import CalendarioAdmin from '../CalendarioAdmin';
+import { Button } from '@/components/ui/button';
 
 const Dashboard = ({ onNavigateTab }) => {
   const { onlineUsers } = useAuth();
@@ -57,6 +58,46 @@ const Dashboard = ({ onNavigateTab }) => {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
+        // Helper: divide IDs em lotes e executa queries em paralelo para não estourar o limite de URL do PostgREST
+        const BATCH_SIZE = 100;
+        const batchIn = async (table, selectCols, columnName, allIds, extraFilters = []) => {
+          if (!allIds || allIds.length === 0) return [];
+          const chunks = [];
+          for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
+            chunks.push(allIds.slice(i, i + BATCH_SIZE));
+          }
+          const results = await Promise.all(
+            chunks.map(chunk => {
+              let query = supabase.from(table).select(selectCols).in(columnName, chunk);
+              for (const filter of extraFilters) {
+                if (filter.type === 'eq') query = query.eq(filter.col, filter.val);
+                if (filter.type === 'in') query = query.in(filter.col, filter.val);
+              }
+              return query;
+            })
+          );
+          return results.flatMap(r => r.data || []);
+        };
+
+        const batchCount = async (table, columnName, allIds, extraFilters = []) => {
+          if (!allIds || allIds.length === 0) return 0;
+          const chunks = [];
+          for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
+            chunks.push(allIds.slice(i, i + BATCH_SIZE));
+          }
+          const results = await Promise.all(
+            chunks.map(chunk => {
+              let query = supabase.from(table).select('id', { count: 'exact', head: true }).in(columnName, chunk);
+              for (const filter of extraFilters) {
+                if (filter.type === 'eq') query = query.eq(filter.col, filter.val);
+                if (filter.type === 'in') query = query.in(filter.col, filter.val);
+              }
+              return query;
+            })
+          );
+          return results.reduce((sum, r) => sum + (r.count || 0), 0);
+        };
+
         const fetchCounts = async () => {
           const [uAprov, uPend, cPend] = await Promise.all([
             supabase.from('perfis').select('id', { count: 'exact', head: true }).eq('role', 'visitante').eq('aprovado', true),
@@ -91,8 +132,9 @@ const Dashboard = ({ onNavigateTab }) => {
         let aHoje = 0;
         if (vagasHoje && vagasHoje.length > 0) {
           const ids = vagasHoje.map(v => v.id);
-          const { count } = await supabase.from('agendamentos').select('id', { count: 'exact', head: true }).in('vaga_configuracao_id', ids).in('status', ['pendente', 'aprovado']);
-          aHoje = count || 0;
+          aHoje = await batchCount('agendamentos', 'vaga_configuracao_id', ids, [
+            { type: 'in', col: 'status', val: ['pendente', 'aprovado'] }
+          ]);
         }
 
         const { data: vagasMes, error: e5 } = await supabase.from('vagas_configuracao').select('id, vagas_totais').gte('data_visita', monthStart).lte('data_visita', monthEnd);
@@ -102,11 +144,11 @@ const Dashboard = ({ onNavigateTab }) => {
         if (!e5 && vagasMes && vagasMes.length > 0) {
           const vagasIds = vagasMes.map(v => v.id);
           const totalVagas = vagasMes.reduce((acc, curr) => acc + curr.vagas_totais, 0);
-          const { data: agendamentosMesData } = await supabase.from('agendamentos').select('id').in('vaga_configuracao_id', vagasIds).eq('status', 'aprovado');
-          if (agendamentosMesData) {
-            totalAgendamentosMes = agendamentosMesData.length;
-            tOcupacao = totalVagas > 0 ? Math.round((totalAgendamentosMes / totalVagas) * 100) : 0;
-          }
+          const agendamentosMesData = await batchIn('agendamentos', 'id', 'vaga_configuracao_id', vagasIds, [
+            { type: 'eq', col: 'status', val: 'aprovado' }
+          ]);
+          totalAgendamentosMes = agendamentosMesData.length;
+          tOcupacao = totalVagas > 0 ? Math.round((totalAgendamentosMes / totalVagas) * 100) : 0;
         }
 
         const sixMonthsAgo = new Date();
@@ -117,7 +159,9 @@ const Dashboard = ({ onNavigateTab }) => {
 
         if (allVagas6m && allVagas6m.length > 0) {
           const ids6m = allVagas6m.map(v => v.id);
-          const { data: agendamentos6m } = await supabase.from('agendamentos').select('vaga_configuracao_id').in('vaga_configuracao_id', ids6m).eq('status', 'aprovado');
+          const agendamentos6m = await batchIn('agendamentos', 'vaga_configuracao_id', 'vaga_configuracao_id', ids6m, [
+            { type: 'eq', col: 'status', val: 'aprovado' }
+          ]);
           if (agendamentos6m) {
             const vagaToDate = allVagas6m.reduce((acc, v) => { acc[v.id] = v.data_visita; return acc; }, {});
             const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -180,7 +224,6 @@ const Dashboard = ({ onNavigateTab }) => {
 
   return (
     <div className="space-y-6">
-      {/* KPI Cards Row */}
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         <Card className="bg-slate-50 border-blue-200 shadow-sm relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
@@ -254,7 +297,10 @@ const Dashboard = ({ onNavigateTab }) => {
         </Card>
       </div>
 
-      {/* SAÚDE DO SISTEMA */}
+      <div className="w-full">
+        <CalendarioAdmin />
+      </div>
+
       <Card className="bg-white shadow-sm border border-gray-200">
         <CardHeader className="pb-2">
           <CardTitle className="text-xs font-bold flex items-center gap-2 text-gray-600">
@@ -271,9 +317,7 @@ const Dashboard = ({ onNavigateTab }) => {
         </CardContent>
       </Card>
 
-      {/* MÉTRICAS AVANÇADAS DO SISTEMA */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Conexões e MAU */}
         <Card className="bg-white shadow-sm border border-gray-200">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-bold flex items-center gap-2 text-gray-600">
@@ -323,7 +367,6 @@ const Dashboard = ({ onNavigateTab }) => {
           </CardContent>
         </Card>
 
-        {/* Tamanho por Tabela */}
         <Card className="bg-white shadow-sm border border-gray-200">
           <CardHeader className="pb-2">
             <CardTitle className="text-xs font-bold flex items-center gap-2 text-gray-600">
@@ -356,14 +399,7 @@ const Dashboard = ({ onNavigateTab }) => {
         </Card>
       </div>
 
-      {/* NOVO POSICIONAMENTO: CALENDÁRIO FULL WIDTH */}
-      <div className="w-full">
-        <CalendarioAdmin />
-      </div>
-
-      {/* GRID INFERIOR: GRÁFICO (ESQUERDA) E TAXA (DIREITA) */}
       <div className="grid gap-6 md:grid-cols-2">
-        {/* OCUPAÇÃO ÚLTIMOS 6 MESES (LADO ESQUERDO) */}
         <Card className="bg-white shadow-sm border border-gray-200">
           <CardHeader>
             <CardTitle className="flex items-center text-gray-800 text-base">
@@ -389,7 +425,6 @@ const Dashboard = ({ onNavigateTab }) => {
           </CardContent>
         </Card>
 
-        {/* TAXA DE OCUPAÇÃO (LADO DIREITO) */}
         <Card className="bg-white shadow-sm border border-gray-200">
           <CardHeader>
             <CardTitle className="flex items-center text-gray-800 text-base">
@@ -409,6 +444,24 @@ const Dashboard = ({ onNavigateTab }) => {
             </p>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-[24px] border border-gray-200 shadow-sm">
+        <div>
+          <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight flex items-center gap-2">
+            <Activity className="w-5 h-5 text-[#2D5016]" /> Painel de Monitoramento
+          </h2>
+          <p className="text-xs text-gray-500 font-medium mt-0.5">Clique em sincronizar para recarregar todas as métricas acima.</p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchStats}
+          disabled={loading}
+          className="bg-white border-gray-200 text-gray-700 hover:bg-gray-50 font-bold uppercase text-xs tracking-widest px-5 h-11 rounded-xl flex items-center gap-2 w-full sm:w-auto justify-center"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sincronizar Dados"}
+        </Button>
       </div>
     </div>
   );

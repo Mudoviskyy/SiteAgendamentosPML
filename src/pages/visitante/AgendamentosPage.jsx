@@ -438,16 +438,6 @@ const AgendamentosPage = () => {
                     </Button>
                   </div>
 
-                  {/* NOVO AVISO DE CANCELAMENTO */}
-                  <div className="bg-white border border-gray-100 p-4 rounded-xl flex items-center gap-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-500">
-                    <div className="bg-green-50 p-2.5 rounded-full shrink-0">
-                      <AlertCircle className="w-5 h-5 text-green-600" />
-                    </div>
-                    <p className="text-sm text-gray-600 leading-tight">
-                      <strong className="text-gray-900">Atenção:</strong> Para cancelar um agendamento feito por este portal, a solicitação deve ser feita via <span className="font-bold text-green-700">WhatsApp do Setor Social</span> (49) 3289-8495.
-                    </p>
-                  </div>
-
                   {/* PRÓXIMAS VISITAS (SEMPRE VISÍVEIS) */}
                   {categorias.ativos.length > 0 && (
                     <div className="space-y-4">

@@ -71,7 +71,8 @@ const AgendamentoForm = () => {
 
       if (status.validade && selectedSlot?.data_visita) {
         const dataVisita = new Date(`${selectedSlot.data_visita}T00:00:00`);
-        const dataValidade = new Date(status.validade);
+        // Extrai apenas YYYY-MM-DD do timestamp UTC para não sofrer conversão de fuso.
+        const dataValidade = new Date((status.validade || '').substring(0, 10) + 'T00:00:00');
         dataValidade.setHours(0, 0, 0, 0);
 
         if (dataVisita > dataValidade) {

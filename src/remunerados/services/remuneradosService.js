@@ -267,10 +267,10 @@ export const remuneradosService = {
         .maybeSingle();
 
       if (error) throw error;
-      return { success: true, data: data || { limite_rd: 5, limite_rn: 5 } };
+      return { success: true, data: data || { limite_rd: 2, limite_rn: 1 } };
     } catch (error) {
       console.error('Erro ao buscar limites do mês:', error);
-      return { success: false, data: { limite_rd: 5, limite_rn: 5 } };
+      return { success: false, data: { limite_rd: 2, limite_rn: 1 } };
     }
   }
 };

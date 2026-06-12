@@ -26,14 +26,40 @@ export const useRemuneradosAdmin = () => {
     return admin?.id;
   };
 
-  const fetchDashboardMetrics = useCallback(async () => {
+  const fetchDashboardMetrics = useCallback(async (mes, ano) => {
     setLoading(true);
     try {
-      const { data: servicos } = await supabase.from('vw_agendamentos_admin').select('tipo, status');
-      const { data: solicitacoes } = await supabase.from('vw_solicitacoes_banco_horas_admin').select('horas, status');
-      const { data: debitos } = await supabase.from('uso_horas').select('status');
-      const { data: servidoresData, count: activeStaff } = await supabase.from('servidores').select('id, plantao', { count: 'exact' }).eq('ativo', true);
-      const { data: vagas } = await supabase.from('vagas_remunerados').select('vagas_totais, vagas_ocupadas');
+      let servicosQuery = supabase.from('vw_agendamentos_admin').select('tipo, status');
+      let solicitacoesQuery = supabase.from('vw_solicitacoes_banco_horas_admin').select('horas, status');
+      let debitosQuery = supabase.from('uso_horas').select('status');
+      let vagasQuery = supabase.from('vw_calendario_remunerados').select('vagas_totais, vagas_ocupadas');
+
+      if (mes && ano) {
+        const startOfMonthStr = `${ano}-${String(mes).padStart(2, '0')}-01`;
+        const lastDay = new Date(ano, mes, 0).getDate();
+        const endOfMonthStr = `${ano}-${String(mes).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+        servicosQuery = servicosQuery.gte('data', startOfMonthStr).lte('data', endOfMonthStr);
+        vagasQuery = vagasQuery.gte('data', startOfMonthStr).lte('data', endOfMonthStr);
+        
+        // Filtros para banco de horas no mês (criados naquele período)
+        solicitacoesQuery = solicitacoesQuery.gte('created_at', startOfMonthStr).lte('created_at', `${endOfMonthStr} 23:59:59`);
+        debitosQuery = debitosQuery.gte('created_at', startOfMonthStr).lte('created_at', `${endOfMonthStr} 23:59:59`);
+      }
+
+      const [
+        { data: servicos },
+        { data: solicitacoes },
+        { data: debitos },
+        { data: servidoresData, count: activeStaff },
+        { data: vagas }
+      ] = await Promise.all([
+        servicosQuery,
+        solicitacoesQuery,
+        debitosQuery,
+        supabase.from('servidores').select('id, plantao', { count: 'exact' }).eq('ativo', true),
+        vagasQuery
+      ]);
 
       const aprovados = servicos?.filter(s => s.status === 'aprovado' || s.status === 'reagendado') || [];
       const completedServices = aprovados.length;
@@ -69,7 +95,9 @@ export const useRemuneradosAdmin = () => {
         chart: { RD: totalRD, RN: totalRN },
         bancoHorasTotal,
         pendingRequests,
-        plantaoDistribution
+        plantaoDistribution,
+        totalVagas,
+        ocupadasVagas
       };
 
       return { success: true, data: metrics };
@@ -198,15 +226,19 @@ export const useRemuneradosAdmin = () => {
 
       const { data: vaga, error: vagaError } = await supabase
         .from('vw_calendario_remunerados')
-        .select('vagas_totais, vagas_ocupadas')
+        .select('vagas_totais, vagas_ocupadas, ativa')
         .eq('data', novaData)
         .eq('tipo', tipo)
         .maybeSingle();
 
       if (vagaError && vagaError.code !== 'PGRST116') throw vagaError;
 
-      if (!vaga || vaga.vagas_totais === 0) {
+      if (!vaga) {
         throw new Error(`Não existem vagas configuradas para o turno ${tipo} no dia ${format(nd, 'dd/MM/yyyy')}.`);
+      }
+
+      if (vaga.ativa === false || vaga.vagas_totais === 0) {
+        throw new Error(`O turno ${tipo} no dia ${format(nd, 'dd/MM/yyyy')} está bloqueado ou indisponível.`);
       }
 
       if (vaga.vagas_ocupadas >= vaga.vagas_totais) {
@@ -270,13 +302,17 @@ export const useRemuneradosAdmin = () => {
         // Validação básica de vaga
         const { data: vaga } = await supabase
           .from('vw_calendario_remunerados')
-          .select('vagas_totais, vagas_ocupadas')
+          .select('vagas_totais, vagas_ocupadas, ativa')
           .eq('data', sol.data)
           .eq('tipo', sol.tipo)
           .maybeSingle();
           
-        if (!vaga || vaga.vagas_totais === 0) {
+        if (!vaga) {
           throw new Error(`Não existem vagas configuradas para o dia ${sol.data} e turno ${sol.tipo}.`);
+        }
+
+        if (vaga.ativa === false || vaga.vagas_totais === 0) {
+          throw new Error(`O dia ${sol.data} e turno ${sol.tipo} está bloqueado ou indisponível.`);
         }
         
         // Verificação se servidor já está escalado NESSE TURNO ESPECÍFICO

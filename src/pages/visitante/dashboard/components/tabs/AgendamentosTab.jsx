@@ -15,12 +15,12 @@ const AgendamentosTab = ({ refreshTrigger, setSelectedAgendamentoId, setShowCanc
           </p>
         </div>
       </div>
-      <MeusAgendamentos 
-        refresh={refreshTrigger} 
+      <MeusAgendamentos
+        refresh={refreshTrigger}
         onCancelClick={(id) => {
           setSelectedAgendamentoId(id);
           setShowCancelModal(true);
-        }} 
+        }}
       />
     </div>
   );

@@ -75,6 +75,29 @@ const fixEncoding = (text) => {
   return text;
 };
 
+const OPTIONS_PARENTESCO = [
+  { value: "Pai", label: "Pai" },
+  { value: "Mãe", label: "Mãe" },
+  { value: "Filho(a)", label: "Filho(a)" },
+  { value: "Irmão(ã)", label: "Irmão(ã)" },
+  { value: "Enteado(a)", label: "Enteado(a)" },
+  { value: "Avô / Avó", label: "Avô / Avó" },
+  { value: "Neto(a)", label: "Neto(a)" },
+  { value: "Nora", label: "Nora" },
+  { value: "Representante legal", label: "Representante Legal" },
+  { value: "Genro", label: "Genro" },
+  { value: "Esposo / Esposa", label: "Esposo / Esposa" },
+  { value: "Companheiro(a) (união estável)", label: "Companheiro(a) (união estável)" },
+  { value: "Cunhado(a)", label: "Cunhado(a)" },
+  { value: "Primo(a)", label: "Primo(a)" },
+  { value: "Sobrinho(a)", label: "Sobrinho(a)" },
+  { value: "Tio(a)", label: "Tio(a)" },
+  { value: "Sogro(a)", label: "Sogro(a)" },
+  { value: "Padrasto", label: "Padrasto" },
+  { value: "Madrasta", label: "Madrasta" },
+  { value: "Amigo(a)", label: "Amigo(a)" }
+];
+
 const CarteirinhasAdmin = () => {
   const { sincronizado, loading: syncLoading, marcarConcluido } = useSincronizacaoDiaria();
   const [carteirinhas, setCarteirinhas] = useState([]);
@@ -100,6 +123,14 @@ const CarteirinhasAdmin = () => {
   const [validacaoPreso, setValidacaoPreso] = useState({ loading: false, data: null });
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
+
+  const [editVisitorNameMode, setEditVisitorNameMode] = useState(false);
+  const [novoNomeVisitante, setNovoNomeVisitante] = useState('');
+  const [savingNomeVisitante, setSavingNomeVisitante] = useState(false);
+
+  const [editParentescoMode, setEditParentescoMode] = useState(false);
+  const [novoParentesco, setNovoParentesco] = useState('');
+  const [savingParentesco, setSavingParentesco] = useState(false);
 
   const fetchCarteirinhas = useCallback(async () => {
     setLoading(true);
@@ -380,6 +411,153 @@ const CarteirinhasAdmin = () => {
     checkValidacao();
   }, [selectedCarteirinha]);
 
+  // Reseta o modo de edição de nome do visitante e parentesco ao fechar o modal
+  useEffect(() => {
+    if (!selectedCarteirinha) {
+      setEditVisitorNameMode(false);
+      setNovoNomeVisitante('');
+      setEditParentescoMode(false);
+      setNovoParentesco('');
+    }
+  }, [selectedCarteirinha]);
+
+  const salvarEdicaoParentesco = async () => {
+    if (!selectedCarteirinha?.id) return;
+    setSavingParentesco(true);
+    try {
+      const parentescoFinal = novoParentesco.trim();
+      if (!parentescoFinal) {
+        toast({ title: 'Parentesco inválido', description: 'Selecione um parentesco válido.', className: 'bg-red-500 text-white' });
+        setSavingParentesco(false);
+        return;
+      }
+
+      if (parentescoFinal === selectedCarteirinha.parentesco) {
+        toast({ title: 'Nenhuma alteração', description: 'O parentesco informado é igual ao atual.', className: 'bg-gray-700 text-white' });
+        setSavingParentesco(false);
+        setEditParentescoMode(false);
+        return;
+      }
+
+      // Atualiza apenas este registro de carteirinha (o parentesco é específico do vínculo com o detento)
+      const { error: errCart } = await supabase
+        .from('carteirinhas')
+        .update({
+          parentesco: parentescoFinal,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedCarteirinha.id);
+      if (errCart) throw errCart;
+
+      addLog('ADMIN_CORRECAO_PARENTESCO', { carteirinha_id: selectedCarteirinha.id, novoParentesco: parentescoFinal }, 'SUCCESS');
+
+      toast({
+        title: '✅ Parentesco atualizado!',
+        description: `O parentesco foi alterado para esta solicitação/carteirinha.`,
+        className: 'bg-[#2D5016] text-white border-none'
+      });
+
+      // Atualiza o estado local do modal
+      setSelectedCarteirinha(prev => ({
+        ...prev,
+        parentesco: parentescoFinal
+      }));
+      
+      setEditParentescoMode(false);
+      setNovoParentesco('');
+      fetchCarteirinhas();
+    } catch (err) {
+      toast({ title: 'Erro ao salvar', description: err.message, className: 'bg-red-500 text-white' });
+    } finally {
+      setSavingParentesco(false);
+    }
+  };
+
+  const salvarEdicaoNomeVisitante = async () => {
+    if (!selectedCarteirinha?.id) return;
+    setSavingNomeVisitante(true);
+    try {
+      const nomeFinal = novoNomeVisitante.trim();
+      if (!nomeFinal) {
+        toast({ title: 'Nome inválido', description: 'O nome não pode estar vazio.', className: 'bg-red-500 text-white' });
+        setSavingNomeVisitante(false);
+        return;
+      }
+
+      if (nomeFinal === selectedCarteirinha.nome) {
+        toast({ title: 'Nenhuma alteração', description: 'O nome informado é igual ao atual.', className: 'bg-gray-700 text-white' });
+        setSavingNomeVisitante(false);
+        setEditVisitorNameMode(false);
+        return;
+      }
+
+      // 1. Se possuir usuario_id, atualizamos o perfil, todas as carteirinhas dele e os agendamentos
+      if (selectedCarteirinha.usuario_id) {
+        // Atualiza perfil
+        const { error: errPerfil } = await supabase
+          .from('perfis')
+          .update({
+            nome: nomeFinal,
+            nome_completo: nomeFinal
+          })
+          .eq('id', selectedCarteirinha.usuario_id);
+        if (errPerfil) throw errPerfil;
+
+        // Atualiza todas as carteirinhas do mesmo usuário
+        const { error: errCart } = await supabase
+          .from('carteirinhas')
+          .update({
+            nome: nomeFinal,
+            updated_at: new Date().toISOString()
+          })
+          .eq('usuario_id', selectedCarteirinha.usuario_id);
+        if (errCart) throw errCart;
+
+        // Atualiza agendamentos do mesmo usuário
+        const { error: errAgend } = await supabase
+          .from('agendamentos')
+          .update({
+            visitante1_nome: nomeFinal,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id_visitante', selectedCarteirinha.usuario_id);
+        if (errAgend) throw errAgend;
+      } else {
+        // Caso não tenha usuario_id, atualiza apenas este registro de carteirinha
+        const { error: errCartSingle } = await supabase
+          .from('carteirinhas')
+          .update({
+            nome: nomeFinal,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', selectedCarteirinha.id);
+        if (errCartSingle) throw errCartSingle;
+      }
+
+      addLog('ADMIN_CORRECAO_NOME_VISITANTE', { carteirinha_id: selectedCarteirinha.id, novoNome: nomeFinal }, 'SUCCESS');
+
+      toast({
+        title: '✅ Nome do visitante atualizado!',
+        description: `O nome foi alterado no perfil, nas carteirinhas e nos agendamentos correspondentes.`,
+        className: 'bg-[#2D5016] text-white border-none'
+      });
+
+      // Atualiza o estado local do modal
+      setSelectedCarteirinha(prev => ({
+        ...prev,
+        nome: nomeFinal
+      }));
+      
+      setEditVisitorNameMode(false);
+      setNovoNomeVisitante('');
+      fetchCarteirinhas();
+    } catch (err) {
+      toast({ title: 'Erro ao salvar', description: err.message, className: 'bg-red-500 text-white' });
+    } finally {
+      setSavingNomeVisitante(false);
+    }
+  };
+
   const apagarDocumentosCarteirinha = async (carteirinhaId) => {
     try {
       addLog('PURGE_DOCUMENTS', { id: carteirinhaId }, 'WARN');
@@ -580,6 +758,15 @@ const CarteirinhasAdmin = () => {
     bloqueado: 'Bloqueado'
   };
 
+  // Retorna true se a carteirinha está aprovada mas com validade já expirada
+  const isVencida = (c) => {
+    if (!c.validade || c.status !== 'aprovado') return false;
+    // Extrai YYYY-MM-DD do timestamp UTC para não deslocar um dia por conta do fuso.
+    const datePart = String(c.validade).substring(0, 10);
+    const validadeLocal = new Date(datePart + 'T23:59:59');
+    return validadeLocal < new Date();
+  };
+
   if (syncLoading) {
     return <div className="flex h-screen items-center justify-center bg-gray-50"><Loader2 className="animate-spin text-blue-500 w-12 h-12" /></div>;
   }
@@ -746,8 +933,15 @@ const CarteirinhasAdmin = () => {
                   </TableCell>
                   <TableCell className="align-middle py-4 max-w-[200px]">
                     {c.validade && (
-                      <div className="text-[10px] text-green-700 font-bold uppercase">
+                      <div className={`text-[10px] font-bold uppercase flex flex-col gap-0.5 ${
+                        isVencida(c) ? 'text-orange-600' : 'text-green-700'
+                      }`}>
                         Val: {formatDate(c.validade)}
+                        {isVencida(c) && (
+                          <span className="inline-flex items-center gap-0.5 bg-orange-100 text-orange-700 border border-orange-300 rounded px-1 py-0.5 text-[9px] font-black uppercase w-fit animate-pulse">
+                            <AlertTriangle className="w-2.5 h-2.5" /> VENCIDA
+                          </span>
+                        )}
                       </div>
                     )}
                     <div className="text-[10px] text-red-600 italic whitespace-normal break-words leading-tight">
@@ -814,6 +1008,21 @@ const CarteirinhasAdmin = () => {
 
           {selectedCarteirinha && (
             <div className="space-y-6 py-4">
+
+              {/* Banner de carteirinha vencida */}
+              {isVencida(selectedCarteirinha) && (
+                <div className="flex items-center gap-3 bg-orange-50 border border-orange-300 rounded-xl px-4 py-3">
+                  <AlertTriangle className="w-5 h-5 text-orange-500 shrink-0" />
+                  <div>
+                    <p className="text-[11px] font-black uppercase text-orange-700 tracking-wide">Carteirinha Vencida</p>
+                    <p className="text-[10px] text-orange-600 font-medium mt-0.5">
+                      Esta carteirinha está aprovada, porém sua validade expirou em <strong>{formatDate(selectedCarteirinha.validade)}</strong>.
+                      O visitante precisa solicitar a renovação.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-4 bg-green-50 rounded-xl border border-green-100 flex flex-col justify-between">
                   <div>
@@ -825,21 +1034,111 @@ const CarteirinhasAdmin = () => {
                     </h4>
                     <div className="flex-1">
                       <p className="text-[10px] font-bold text-green-600/70 uppercase tracking-widest mb-1">Visitante / Requerente</p>
-                      <p className="font-black text-gray-900 uppercase text-lg leading-tight mb-4">
-                        {fixEncoding(selectedCarteirinha.nome)}
-                      </p>
+                      {!editVisitorNameMode ? (
+                        <div className="flex flex-col gap-1 mb-4">
+                          <p className="font-black text-gray-900 uppercase text-lg leading-tight">
+                            {fixEncoding(selectedCarteirinha.nome)}
+                          </p>
+                          <button
+                            onClick={() => {
+                              setNovoNomeVisitante(selectedCarteirinha.nome || '');
+                              setEditVisitorNameMode(true);
+                            }}
+                            className="w-fit inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#2D5016] text-white hover:bg-[#1f3810] transition-all text-[10px] font-bold uppercase shadow-sm mt-1"
+                          >
+                            ✏️ Editar Nome
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="bg-white border border-green-200 rounded-lg p-3 shadow-sm mb-4 space-y-2">
+                          <label className="text-[9px] font-bold text-gray-500 uppercase">Novo Nome do Visitante</label>
+                          <Input
+                            value={novoNomeVisitante}
+                            onChange={(e) => setNovoNomeVisitante(e.target.value)}
+                            placeholder="Nome completo"
+                            className="bg-white text-gray-900 border-gray-200 text-sm h-8"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={salvarEdicaoNomeVisitante}
+                              disabled={savingNomeVisitante || !novoNomeVisitante.trim()}
+                              className="bg-[#2D5016] hover:bg-[#1f3810] text-white h-8 text-xs font-bold flex-1"
+                            >
+                              {savingNomeVisitante ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : '💾 '}
+                              Salvar
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => setEditVisitorNameMode(false)}
+                              disabled={savingNomeVisitante}
+                              className="h-8 text-xs flex-1"
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                       
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-4">
                         <div className="space-y-0.5">
                           <p className="text-[9px] font-bold text-green-600/70 uppercase tracking-wider">Parentesco</p>
-                          <p className="text-sm font-bold text-gray-700 uppercase">{fixEncoding(selectedCarteirinha.parentesco)}</p>
-                          {/* Parentesco solicitado para PAR- */}
-                          {selectedCarteirinha?.protocolo?.startsWith('PAR-') && selectedCarteirinha?.parentesco_solicitado && (
-                            <div className="mt-1 flex items-center gap-1.5">
-                              <span className="text-[9px] font-black text-rose-500 uppercase">→ Solicitado:</span>
-                              <span className="text-xs font-black text-rose-700 uppercase bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
-                                {fixEncoding(selectedCarteirinha.parentesco_solicitado)}
-                              </span>
+                          {!editParentescoMode ? (
+                            <div className="flex flex-col gap-1">
+                              <p className="text-sm font-bold text-gray-700 uppercase">{fixEncoding(selectedCarteirinha.parentesco)}</p>
+                              {selectedCarteirinha?.protocolo?.startsWith('PAR-') && selectedCarteirinha?.parentesco_solicitado && (
+                                <div className="mt-1 flex items-center gap-1.5">
+                                  <span className="text-[9px] font-black text-rose-500 uppercase">→ Solicitado:</span>
+                                  <span className="text-xs font-black text-rose-700 uppercase bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                    {fixEncoding(selectedCarteirinha.parentesco_solicitado)}
+                                  </span>
+                                </div>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setNovoParentesco(selectedCarteirinha.parentesco || '');
+                                  setEditParentescoMode(true);
+                                }}
+                                className="w-fit inline-flex items-center gap-1 px-2 py-0.5 rounded bg-[#2D5016] text-white hover:bg-[#1f3810] transition-all text-[10px] font-bold uppercase shadow-sm mt-1"
+                              >
+                                ✏️ Editar Parentesco
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-2 mt-1">
+                              <Select
+                                value={novoParentesco}
+                                onValueChange={setNovoParentesco}
+                                disabled={savingParentesco}
+                              >
+                                <SelectTrigger className="bg-white text-gray-900 border-gray-200 text-sm h-8">
+                                  <SelectValue placeholder="Selecione o parentesco" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {OPTIONS_PARENTESCO.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={salvarEdicaoParentesco}
+                                  disabled={savingParentesco || !novoParentesco}
+                                  className="bg-[#2D5016] hover:bg-[#1f3810] text-white h-8 text-xs font-bold flex-1"
+                                >
+                                  {savingParentesco ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : '💾 '}
+                                  Salvar
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setEditParentescoMode(false)}
+                                  disabled={savingParentesco}
+                                  className="h-8 text-xs flex-1"
+                                >
+                                  Cancelar
+                                </Button>
+                              </div>
                             </div>
                           )}
                         </div>

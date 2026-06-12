@@ -59,7 +59,9 @@ const AdminDashboard = () => {
             </TabsList>
 
             {/* ... Conteúdos anteriores omitidos por brevidade ... */}
-            <TabsContent value="dashboard" className="space-y-4"><Dashboard onNavigateTab={setActiveTab} /></TabsContent>
+            <TabsContent value="dashboard" className="space-y-4">
+              {activeTab === "dashboard" && <Dashboard onNavigateTab={setActiveTab} />}
+            </TabsContent>
             <TabsContent value="usuarios" className="space-y-4"><UserManagement /></TabsContent>
             <TabsContent value="carteirinhas" className="space-y-4"><CarteirinhasAdmin /></TabsContent>
             <TabsContent value="agendamentos" className="space-y-4"><Agendamentos /></TabsContent>

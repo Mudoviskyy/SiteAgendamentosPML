@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
-import { UserPlus, Loader2, Mail, Lock, ShieldCheck, Check, X, ClipboardList } from 'lucide-react';
+import { UserPlus, Loader2, Mail, Lock, ShieldCheck, Check, X, ClipboardList, Eye, EyeOff } from 'lucide-react';
 import { 
   validateNome, validateSenha, validateConfirmaSenha, validateEmail as originalValidateEmail 
 } from '@/utils/validators';
@@ -43,6 +43,8 @@ const CadastroRemunerados = () => {
   const [touched, setTouched] = useState({});
   const [loading, setLoading] = useState(false);
   const [sucesso, setSucesso] = useState(false);
+  const [showSenha, setShowSenha] = useState(false);
+  const [showConfirmarSenha, setShowConfirmarSenha] = useState(false);
   
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -293,32 +295,50 @@ const CadastroRemunerados = () => {
                   <Label className="text-zinc-300 ml-1 flex items-center gap-2">
                     <Lock className="w-4 h-4 text-[#84cc41]" /> Senha
                   </Label>
-                  <Input 
-                    type="password" 
-                    name="senha"
-                    required
-                    value={formData.senha}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    className={getInputClass('senha')}
-                    placeholder="••••••••"
-                  />
+                  <div className="relative flex items-center">
+                    <Input 
+                      type={showSenha ? "text" : "password"} 
+                      name="senha"
+                      required
+                      value={formData.senha}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      className={`${getInputClass('senha')} pr-10`}
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSenha(!showSenha)}
+                      className="absolute right-3 text-zinc-400 hover:text-white transition-colors focus:outline-none"
+                    >
+                      {showSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                   {touched.senha && errors.senha && <p className="text-red-500 text-[10px] mt-1 ml-1 leading-tight">{errors.senha}</p>}
                 </div>
                 <div className="space-y-2">
                   <Label className="text-zinc-300 ml-1 flex items-center gap-2">
                     <Lock className="w-4 h-4 text-[#84cc41]" /> Confirmar Senha
                   </Label>
-                  <Input 
-                    type="password" 
-                    name="confirmar_senha"
-                    required
-                    value={formData.confirmar_senha}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    className={getInputClass('confirmar_senha')}
-                    placeholder="Repita a senha"
-                  />
+                  <div className="relative flex items-center">
+                    <Input 
+                      type={showConfirmarSenha ? "text" : "password"} 
+                      name="confirmar_senha"
+                      required
+                      value={formData.confirmar_senha}
+                      onChange={handleChange}
+                      onBlur={handleBlur}
+                      className={`${getInputClass('confirmar_senha')} pr-10`}
+                      placeholder="Repita a senha"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmarSenha(!showConfirmarSenha)}
+                      className="absolute right-3 text-zinc-400 hover:text-white transition-colors focus:outline-none"
+                    >
+                      {showConfirmarSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                   {touched.confirmar_senha && errors.confirmar_senha && <p className="text-red-500 text-[10px] mt-1 ml-1">{errors.confirmar_senha}</p>}
                 </div>
               </div>

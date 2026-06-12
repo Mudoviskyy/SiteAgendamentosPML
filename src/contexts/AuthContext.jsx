@@ -234,7 +234,10 @@ export const AuthProvider = ({ children }) => {
           setProfile(profileData);
           addLog('AuthContext: onAuthStateChange -> Profile Sync', { role: profileData.role }, 'SUCCESS');
         }
-        setupPresence(session.user);
+        // Só recria o canal de presence se não existir ou se for um usuário diferente
+        if (!presenceChannel || presenceChannel.presenceState === undefined) {
+          setupPresence(session.user);
+        }
       } else {
         setUser(null);
         setProfile(null);

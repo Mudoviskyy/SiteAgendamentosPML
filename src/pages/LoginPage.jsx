@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ const LoginPage = () => {
   } = useAuth();
   
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   
   const [email, setEmail] = useState('');
@@ -65,13 +66,10 @@ const LoginPage = () => {
   useEffect(() => {
     // Se já temos os dados (ex: via F5 ou vindo de outra página), navega
     if (!authLoading && user && profile && !emailConfirmationRequired && !adminApprovalRequired) {
-      if (profile.role === 'admin') {
-        navigate('/admin');
-      } else if (profile.role === 'visitante' && profile.aprovado) {
-        navigate('/painel');
-      }
+      const from = location.state?.from?.pathname || (profile.role === 'admin' ? '/admin' : '/painel');
+      navigate(from, { replace: true });
     }
-  }, [user, profile, authLoading, emailConfirmationRequired, adminApprovalRequired, navigate, toast]);
+  }, [user, profile, authLoading, emailConfirmationRequired, adminApprovalRequired, navigate, toast, location.state]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -138,13 +136,12 @@ const LoginPage = () => {
         // 4. Navegação Direta (Otimização para evitar delay do useEffect)
         const profileData = result.profile;
         if (profileData) {
-          if (profileData.role === 'admin') {
-            navigate('/admin');
-            toast({ title: "Bem-vindo, Administrador!", className: "bg-blue-600 text-white" });
-          } else if (profileData.role === 'visitante' && profileData.aprovado) {
-            navigate('/painel');
-            toast({ title: "Bem-vindo de volta!", className: "bg-[#2D5016] text-white" });
-          }
+          const from = location.state?.from?.pathname || (profileData.role === 'admin' ? '/admin' : '/painel');
+          navigate(from, { replace: true });
+          toast({ 
+            title: profileData.role === 'admin' ? "Bem-vindo, Administrador!" : "Bem-vindo de volta!", 
+            className: profileData.role === 'admin' ? "bg-blue-600 text-white" : "bg-[#2D5016] text-white" 
+          });
         }
       }
     } catch (error) { console.error(error); } finally {

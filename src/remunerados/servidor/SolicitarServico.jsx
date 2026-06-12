@@ -40,26 +40,41 @@ const SolicitarServico = ({ servidorId, servidorPlantao, onSolicitado }) => {
   const [data, setData] = useState('');
   const [turno, setTurno] = useState('');
   const [isDuplo, setIsDuplo] = useState(false);
-  const [limitesMes, setLimitesMes] = useState({ limite_rd: 5, limite_rn: 5 });
+  const [limitesMes, setLimitesMes] = useState(null); // null = ainda não carregado
+  const [currentMonth, setCurrentMonth] = useState(new Date());
   
-  const { fetchVagas, solicitarServico, vagasDisponiveis, servicos, loading } = useRemunerados();
+  const { fetchVagas, solicitarServico, fetchServicos, vagasDisponiveis, servicos, loading } = useRemunerados();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Busca o histórico de serviços do servidor para validação correta de limites
+  useEffect(() => {
+    if (servidorId) fetchServicos(servidorId);
+  }, [servidorId, fetchServicos]);
 
   useEffect(() => {
     if (tipo) {
       fetchVagas(tipo);
       setTurno('');
       if (tipo === 'RN') setIsDuplo(false);
-
-      // Carregar limites do mês atual
-      const now = new Date();
-      const anoMes = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      remuneradosService.fetchLimitesMes(anoMes).then(res => {
-        if (res.success) setLimitesMes(res.data);
-      });
     }
   }, [tipo, fetchVagas]);
+
+  // Alinha o mês ativo do calendário quando uma data é explicitamente selecionada
+  useEffect(() => {
+    if (data) {
+      setCurrentMonth(new Date(data + 'T12:00:00Z'));
+    }
+  }, [data]);
+
+  // Carrega os limites do mês ativo no calendário
+  useEffect(() => {
+    const anoMes = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+    remuneradosService.fetchLimitesMes(anoMes).then(res => {
+      if (res.success) setLimitesMes(res.data);
+      else setLimitesMes({ limite_rd: 2, limite_rn: 1 }); // fallback conservador
+    });
+  }, [currentMonth]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -94,24 +109,22 @@ const SolicitarServico = ({ servidorId, servidorPlantao, onSolicitado }) => {
       return d.getMonth() === mesAlvo && d.getFullYear() === anoAlvo && s.status !== 'cancelado' && s.status !== 'recusado';
     });
 
-    const aprovadosCount = servicosDoTipoNoMes.filter(s => s.status === 'aprovado').length;
+    // Garante que os limites foram carregados antes de prosseguir
+    if (!limitesMes) {
+      toast({ title: "Aguarde", description: "Verificando limites do mês, tente novamente em instantes.", variant: "destructive" });
+      return;
+    }
+
+    // REGRA SIMPLIFICADA: pendentes + aprovados somam no limite diretamente
     const limiteBase = tipo === 'RD' ? limitesMes.limite_rd : limitesMes.limite_rn;
-    
-    // REGRA 2 + 3: Se não tem 2 aprovados, o limite total (pendentes+aprovados) é 2.
-    const limiteEfetivo = aprovadosCount < 2 ? 2 : limiteBase;
     const totalAposPedido = servicosDoTipoNoMes.length + custoVagas;
 
-    if (totalAposPedido > limiteEfetivo) {
-      let mensagem = `Você já possui ${servicosDoTipoNoMes.length} solicitações de ${tipo} este mês.`;
-      if (aprovadosCount < 2 && limiteBase > 2) {
-        mensagem += ` O limite inicial é de 2 agendamentos. Para liberar as outras ${limiteBase - 2} vagas do mês, você precisa ter os 2 primeiros aprovados pela administração.`;
-      } else {
-        mensagem += ` O limite máximo é de ${limiteBase} por servidor.`;
-      }
-
+    if (totalAposPedido > limiteBase) {
+      const pendentesCount = servicosDoTipoNoMes.filter(s => s.status === 'pendente').length;
+      const aprovadosCount = servicosDoTipoNoMes.filter(s => s.status === 'aprovado').length;
       toast({ 
         title: "Limite Excedido", 
-        description: mensagem, 
+        description: `Você já possui ${aprovadosCount} aprovado(s) e ${pendentesCount} pendente(s) de ${tipo} em ${mesAlvo + 1}/${anoAlvo}. O limite é de ${limiteBase} por servidor.`,
         variant: "destructive" 
       });
       return;
@@ -155,6 +168,10 @@ const SolicitarServico = ({ servidorId, servidorPlantao, onSolicitado }) => {
     setIsSubmitting(false);
 
     if (result.success) {
+      // ⚠️ Atualiza o histórico local para que o limite seja calculado corretamente
+      // na próxima solicitação sem precisar recarregar a página
+      await fetchServicos(servidorId);
+
       toast({
         title: "Sucesso!",
         description: "Serviço solicitado com sucesso. Aguardando aprovação.",
@@ -212,94 +229,7 @@ const SolicitarServico = ({ servidorId, servidorPlantao, onSolicitado }) => {
                 <SelectItem value="RN">Retribuição Financeira Noturna (RN)</SelectItem>
               </SelectContent>
             </Select>
-            {tipo && (() => {
-              const now = new Date();
-              const mesAlvo = now.getMonth();
-              const anoAlvo = now.getFullYear();
-              const servicosTipoMes = servicos.filter(s => {
-                if (!s.data || s.tipo !== tipo) return false;
-                const d = new Date(s.data + 'T12:00:00Z');
-                return d.getMonth() === mesAlvo && d.getFullYear() === anoAlvo && s.status !== 'cancelado' && s.status !== 'recusado';
-              });
-              
-              const aprovados = servicosTipoMes.filter(s => s.status === 'aprovado').length;
-              const usados = servicosTipoMes.length;
-              const limiteBase = tipo === 'RD' ? limitesMes.limite_rd : limitesMes.limite_rn;
-              const limiteEfetivo = aprovados < 2 ? 2 : limiteBase;
-              const restante = Math.max(0, limiteEfetivo - usados);
-              
-              const isTravadoNoInicio = aprovados < 2 && usados >= 2 && limiteBase > 2;
-
-              return (
-                <div className="space-y-2 mt-2">
-                  <div className={`text-xs font-semibold px-3 py-1.5 rounded-lg border ${restante > 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                    {restante > 0 
-                      ? `Você ainda pode solicitar ${restante} ${tipo}(s) (Limite atual: ${limiteEfetivo})`
-                      : `Limite de ${limiteEfetivo} ${tipo}(s) atingido`
-                    }
-                  </div>
-                  {isTravadoNoInicio && (
-                    <p className="text-[10px] text-amber-600 font-medium px-1 leading-tight">
-                      * Você atingiu o limite inicial de 2. Para liberar as outras {limiteBase - 2} vagas do mês, aguarde a aprovação dos seus pedidos pendentes.
-                    </p>
-                  )}
-                </div>
-              );
-            })()}
           </div>
-
-          {tipo === 'RD' && (
-            <div 
-              className={`
-                flex flex-row items-center gap-3 rounded-xl border p-4 transition-all cursor-pointer shadow-sm
-                ${isDuplo ? 'border-emerald-500 bg-emerald-50' : 'bg-zinc-50/50 hover:border-zinc-300'}
-              `}
-              onClick={() => {
-                const nextVal = !isDuplo;
-                setIsDuplo(nextVal);
-                if (nextVal) setTurno('');
-              }}
-            >
-              <Checkbox 
-                id="rd-duplo"
-                checked={isDuplo} 
-                onCheckedChange={(checked) => {
-                  setIsDuplo(!!checked);
-                  if (checked) setTurno('');
-                }}
-                onClick={(e) => e.stopPropagation()}
-                className="w-5 h-5 border-emerald-500 data-[state=checked]:bg-emerald-500"
-              />
-              <div className="space-y-0.5 flex-1">
-                <Label 
-                  htmlFor="rd-duplo" 
-                  className="text-base font-bold cursor-pointer text-emerald-900"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  RD Duplo (Dois Turnos)
-                </Label>
-                <p className="text-sm text-emerald-700 leading-tight">
-                  Solicita os turnos de 08:00 às 16:00 e 16:00 às 00:00 (Consome 2 do limite).
-                </p>
-              </div>
-            </div>
-          )}
-
-          {tipo && !isDuplo && (
-            <div className="space-y-2">
-              <Label>Selecione o Turno</Label>
-              <Select value={turno} onValueChange={setTurno}>
-                <SelectTrigger className="bg-white">
-                  <SelectValue placeholder="Selecione um turno" />
-                </SelectTrigger>
-                <SelectContent>
-                  {turnosOptions.map(t => (
-                    <SelectItem key={t} value={t}>{t}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
 
           <div className="space-y-3 pt-2">
             <div className="flex items-center gap-2 mb-1">
@@ -321,6 +251,8 @@ const SolicitarServico = ({ servidorId, servidorPlantao, onSolicitado }) => {
                 <DayPicker
                   mode="single"
                   locale={ptBR}
+                  month={currentMonth}
+                  onMonthChange={setCurrentMonth}
                   selected={data ? new Date(data + 'T12:00:00Z') : undefined}
                   onSelect={(day) => {
                     if (!day) return;
@@ -382,6 +314,127 @@ const SolicitarServico = ({ servidorId, servidorPlantao, onSolicitado }) => {
               </div>
             )}
           </div>
+
+          {tipo === 'RD' && (
+            <div 
+              className={`
+                flex flex-row items-center gap-3 rounded-xl border p-4 transition-all cursor-pointer shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500
+                ${isDuplo ? 'border-emerald-500 bg-emerald-50' : 'bg-zinc-50/50 hover:border-zinc-300'}
+              `}
+              onClick={() => {
+                const nextVal = !isDuplo;
+                setIsDuplo(nextVal);
+                if (nextVal) setTurno('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === ' ' || e.key === 'Enter') {
+                  e.preventDefault();
+                  const nextVal = !isDuplo;
+                  setIsDuplo(nextVal);
+                  if (nextVal) setTurno('');
+                }
+              }}
+              tabIndex={0}
+              role="checkbox"
+              aria-checked={isDuplo}
+            >
+              <Checkbox 
+                id="rd-duplo"
+                checked={isDuplo} 
+                readOnly
+                className="w-5 h-5 border-emerald-500 data-[state=checked]:bg-emerald-500 pointer-events-none"
+              />
+              <div className="space-y-0.5 flex-1 pointer-events-none">
+                <Label 
+                  className="text-base font-bold cursor-pointer text-emerald-900"
+                >
+                  RD Duplo (Dois Turnos)
+                </Label>
+                <p className="text-sm text-emerald-700 leading-tight">
+                  Solicita os turnos de 08:00 às 16:00 e 16:00 às 00:00 (Consome 2 do limite).
+                </p>
+              </div>
+            </div>
+          )}
+
+          {tipo && !isDuplo && (
+            <div className="space-y-2">
+              <Label>Selecione o Turno</Label>
+              <Select value={turno} onValueChange={setTurno}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="Selecione um turno" />
+                </SelectTrigger>
+                <SelectContent>
+                  {turnosOptions.map(t => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {tipo && (() => {
+            const mesAlvo = currentMonth.getMonth();
+            const anoAlvo = currentMonth.getFullYear();
+            const servicosTipoMes = servicos.filter(s => {
+              if (!s.data || s.tipo !== tipo) return false;
+              const d = new Date(s.data + 'T12:00:00Z');
+              return d.getMonth() === mesAlvo && d.getFullYear() === anoAlvo && s.status !== 'cancelado' && s.status !== 'recusado';
+            });
+            const aprovados = servicosTipoMes.filter(s => s.status === 'aprovado').length;
+            const pendentes = servicosTipoMes.filter(s => s.status === 'pendente').length;
+            const usados = servicosTipoMes.length; // total: aprovados + pendentes
+            const limiteBase = limitesMes ? (tipo === 'RD' ? limitesMes.limite_rd : limitesMes.limite_rn) : null;
+            const custoSelecionado = (tipo === 'RD' && isDuplo) ? 2 : 1;
+            const restante = limiteBase !== null ? Math.max(0, limiteBase - usados) : null;
+            const podeSolicitar = restante !== null && restante >= custoSelecionado;
+
+            return (
+              <div className="space-y-2 mt-2">
+                {/* Painel de limite global do mês */}
+                <div className="grid grid-cols-3 gap-2 text-center text-xs rounded-lg border border-zinc-200 bg-zinc-50 p-2">
+                  <div>
+                    <p className="font-bold text-zinc-400 uppercase tracking-wider text-[9px]">Limite do Mês</p>
+                    <p className="text-base font-black text-zinc-700">{limiteBase !== null ? limiteBase : '...'}</p>
+                  </div>
+                  <div>
+                    <p className="font-bold text-zinc-400 uppercase tracking-wider text-[9px]">Usados</p>
+                    <p className="text-base font-black text-zinc-700">{usados}</p>
+                  </div>
+                  <div>
+                    <p className="font-bold text-zinc-400 uppercase tracking-wider text-[9px]">Restam</p>
+                    <p className={`text-base font-black ${restante === 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {restante !== null ? restante : '...'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Alerta de status dinâmico */}
+                {restante !== null && (
+                  <div className={`text-xs font-semibold px-3 py-1.5 rounded-lg border ${
+                    !podeSolicitar
+                      ? 'bg-red-50 text-red-700 border-red-200'
+                      : restante <= custoSelecionado
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}>
+                    {!podeSolicitar
+                      ? `Limite de ${limiteBase} atingido — ${pendentes > 0 ? `${pendentes} pedido(s) ainda pendente(s) contam no limite` : 'nenhum slot disponível este mês'}`
+                      : isDuplo
+                        ? `RD Duplo consome 2 vagas — restará ${restante - 2} após este pedido`
+                        : `Você pode solicitar mais ${restante} ${tipo}(s) este mês`
+                    }
+                  </div>
+                )}
+
+                {/* Detalhes aprovados / pendentes */}
+                <div className="flex gap-3 text-[10px] text-zinc-500 px-1">
+                  <span>✅ {aprovados} aprovado(s)</span>
+                  <span>⏳ {pendentes} pendente(s) — contam no limite</span>
+                </div>
+              </div>
+            );
+          })()}
 
           <Button 
             type="submit" 

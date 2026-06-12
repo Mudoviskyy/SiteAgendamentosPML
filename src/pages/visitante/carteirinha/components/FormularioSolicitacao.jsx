@@ -31,19 +31,45 @@ const FormularioSolicitacao = ({ user, profile, onSuccess, setOpenExampleVacina 
   const [loading, setLoading] = useState(false);
   const [showProcessing, setShowProcessing] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  const [possuiCarteirinha, setPossuiCarteirinha] = useState(null);
-  const [parentescoSelecionado, setParentescoSelecionado] = useState("");
-  const [nomeApenado, setNomeApenado] = useState("");
+  const getInitialState = (key, defaultValue) => {
+    try {
+      const stored = sessionStorage.getItem('solicitacao_carteirinha_form');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed[key] !== undefined) return parsed[key];
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return defaultValue;
+  };
+
+  const [parentescoSelecionado, setParentescoSelecionado] = useState(() => getInitialState('parentescoSelecionado', ""));
+  const [nomeApenado, setNomeApenado] = useState(() => getInitialState('nomeApenado', ""));
   // Alerta IPEN: null = sem alerta | { nomeIPEN, matricula, dadosParaSubmit }
   const [ipenAlerta, setIpenAlerta] = useState(null);
 
   const [tipoIdentificacao, setTipoIdentificacao] = useState(TIPOS_IDENTIFICACAO.CPF);
-  const [tipoTelefone, setTipoTelefone] = useState(TIPOS_TELEFONE.BR);
-  const [ddiSelecionado, setDdiSelecionado] = useState('55');
+  const [tipoTelefone, setTipoTelefone] = useState(() => getInitialState('tipoTelefone', TIPOS_TELEFONE.BR));
+  const [ddiSelecionado, setDdiSelecionado] = useState(() => getInitialState('ddiSelecionado', '55'));
   const [documentoValor, setDocumentoValor] = useState("");
-  const [telefoneValor, setTelefoneValor] = useState("");
-  const [dataSelecionada, setDataSelecionada] = useState({ dia: "", mes: "", ano: "" });
+  const [telefoneValor, setTelefoneValor] = useState(() => getInitialState('telefoneValor', ""));
+  const [dataSelecionada, setDataSelecionada] = useState(() => getInitialState('dataSelecionada', { dia: "", mes: "", ano: "" }));
+  const [possuiCarteirinha, setPossuiCarteirinha] = useState(() => getInitialState('possuiCarteirinha', null));
   const [documentosState, setDocumentosState] = useState({});
+
+  useEffect(() => {
+    const formData = {
+      parentescoSelecionado,
+      nomeApenado,
+      tipoTelefone,
+      ddiSelecionado,
+      telefoneValor,
+      dataSelecionada,
+      possuiCarteirinha
+    };
+    sessionStorage.setItem('solicitacao_carteirinha_form', JSON.stringify(formData));
+  }, [parentescoSelecionado, nomeApenado, tipoTelefone, ddiSelecionado, telefoneValor, dataSelecionada, possuiCarteirinha]);
 
   const exigeComprovanteParentesco = PARENTESCOS_QUE_EXIGEM_COMPROVACAO.includes(parentescoSelecionado);
   const ehNovaSolicitacao = possuiCarteirinha === 'nova' || possuiCarteirinha === 'renovacao';
@@ -60,8 +86,6 @@ const FormularioSolicitacao = ({ user, profile, onSuccess, setOpenExampleVacina 
   useEffect(() => {
     if (profile) {
       setTipoIdentificacao(profile.tipo_identificacao || TIPOS_IDENTIFICACAO.CPF);
-      const telefoneInicial = profile.tipo_telefone || (profile.tipo_identificacao === TIPOS_IDENTIFICACAO.ESTRANGEIRO ? TIPOS_TELEFONE.INTERNACIONAL : TIPOS_TELEFONE.BR);
-      setTipoTelefone(telefoneInicial);
 
       let val = profile.cpf || "";
       if (profile.tipo_identificacao === TIPOS_IDENTIFICACAO.CPF) {
@@ -72,13 +96,20 @@ const FormularioSolicitacao = ({ user, profile, onSuccess, setOpenExampleVacina 
       }
       setDocumentoValor(val);
 
-      if (telefoneInicial === TIPOS_TELEFONE.INTERNACIONAL) {
-        const matchDdi = (profile.telefone || "").match(/^\+?(\d{1,4})/);
-        setDdiSelecionado(matchDdi?.[1] || "55");
-        setTelefoneValor((profile.telefone || "").replace(/^\+?\d{1,4}/, "").replace(/\D/g, ""));
-      } else {
-        setDdiSelecionado("55");
-        setTelefoneValor(profile.telefone || "");
+      // Só inicializa do perfil se não houver dados já salvos na sessão
+      const hasStored = sessionStorage.getItem('solicitacao_carteirinha_form');
+      if (!hasStored) {
+        const telefoneInicial = profile.tipo_telefone || (profile.tipo_identificacao === TIPOS_IDENTIFICACAO.ESTRANGEIRO ? TIPOS_TELEFONE.INTERNACIONAL : TIPOS_TELEFONE.BR);
+        setTipoTelefone(telefoneInicial);
+
+        if (telefoneInicial === TIPOS_TELEFONE.INTERNACIONAL) {
+          const matchDdi = (profile.telefone || "").match(/^\+?(\d{1,4})/);
+          setDdiSelecionado(matchDdi?.[1] || "55");
+          setTelefoneValor((profile.telefone || "").replace(/^\+?\d{1,4}/, "").replace(/\D/g, ""));
+        } else {
+          setDdiSelecionado("55");
+          setTelefoneValor(profile.telefone || "");
+        }
       }
     }
   }, [profile]);
@@ -336,6 +367,7 @@ const FormularioSolicitacao = ({ user, profile, onSuccess, setOpenExampleVacina 
       })();
 
       const result = await Promise.race([uploadPromise, timeoutPromise]);
+      sessionStorage.removeItem('solicitacao_carteirinha_form');
       onSuccess(result.protocol);
     } catch (err) {
       let mensagem = err.message || 'Erro desconhecido ao enviar.';

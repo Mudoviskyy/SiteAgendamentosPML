@@ -31,7 +31,11 @@ export const verificarCarteirinhaStatus = async (userId) => {
     };
   }
 
-  const validade = new Date(data.validade);
+  // Extrai apenas a parte da data (YYYY-MM-DD) do timestamp UTC para evitar
+  // que a conversão de fuso horário (UTC → BRT -03:00) desvie o dia.
+  // Ex: "2026-07-24 00:00:00+00" → "2026-07-24" → Date local 24/07, não 23/07.
+  const validadeDateStr = (data.validade || '').substring(0, 10);
+  const validade = new Date(validadeDateStr + 'T00:00:00');
   validade.setHours(0, 0, 0, 0);
 
   if (isNaN(validade)) {

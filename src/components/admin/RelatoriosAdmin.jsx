@@ -210,14 +210,27 @@ const RelatoriosAdmin = () => {
       return `https://wa.me/${limpo}`;
     };
     
-    // Busca prontuários do IPEN para os visitantes principais deste lote
-    const matriculas = [...new Set(rawData.map(item => item.matricula_preso))];
+    // Busca prontuários do IPEN para os visitantes principais deste lote em lotes de 100 para evitar estourar o limite de URL do PostgREST
+    const matriculas = [...new Set(rawData.map(item => item.matricula_preso))].filter(Boolean);
     
-    supabase
-      .from('vinculos_ipen')
-      .select('matricula_preso, nome_visitante_normalizado, prontuario_visitante')
-      .in('matricula_preso', matriculas)
-      .then(({ data: vinculosData }) => {
+    const BATCH_SIZE = 100;
+    const promises = [];
+    for (let i = 0; i < matriculas.length; i += BATCH_SIZE) {
+      const chunk = matriculas.slice(i, i + BATCH_SIZE);
+      promises.push(
+        supabase
+          .from('vinculos_ipen')
+          .select('matricula_preso, nome_visitante_normalizado, prontuario_visitante')
+          .in('matricula_preso', chunk)
+      );
+    }
+    
+    Promise.all(promises)
+      .then(results => {
+        const error = results.find(r => r.error)?.error;
+        if (error) throw error;
+        
+        const vinculosData = results.flatMap(r => r.data || []);
         // Mapa para busca rápida: "matricula_nomeNorm" -> prontuario
         const prontuarioMap = new Map();
         if (vinculosData) {
@@ -246,10 +259,10 @@ const RelatoriosAdmin = () => {
           const keyLookup = `${item.matricula_preso}_${nomeNorm}`;
           const prontuarioOficial = prontuarioMap.get(keyLookup);
 
-          // Exibe prontuário IPEN (4-6 dígitos) ou "(sem prontuário)" — nunca usa CPF/carteirinha
+          // Exibe prontuário IPEN (4-6 dígitos) ou apenas o nome — nunca usa CPF/carteirinha
           const visitanteComProntuario = prontuarioOficial
             ? `${item.visitante1_nome?.toUpperCase()} (${prontuarioOficial})`
-            : `${item.visitante1_nome?.toUpperCase() || "-"} (sem prontuário)`;
+            : `${item.visitante1_nome?.toUpperCase() || "-"}`;
           
           return {
             "DATA E HORA": `${dataFormatada} ${horario}`,

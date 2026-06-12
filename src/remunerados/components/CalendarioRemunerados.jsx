@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-export default function CalendarioRemunerados() {
+export default function CalendarioRemunerados({ onMonthChange }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarData, setCalendarData] = useState([]);
   const [selectedDateStr, setSelectedDateStr] = useState(null);
@@ -17,6 +17,11 @@ export default function CalendarioRemunerados() {
   
   const hooks = useRemuneradosAdmin();
   const { fetchCalendarioData, loading } = hooks;
+
+  const onMonthChangeRef = React.useRef(onMonthChange);
+  useEffect(() => {
+    onMonthChangeRef.current = onMonthChange;
+  }, [onMonthChange]);
 
   const loadData = useCallback(async (dateToLoad) => {
     if (!fetchCalendarioData) return;
@@ -29,6 +34,9 @@ export default function CalendarioRemunerados() {
 
   useEffect(() => {
     loadData(currentMonth);
+    if (onMonthChangeRef.current) {
+      onMonthChangeRef.current(currentMonth);
+    }
   }, [currentMonth, loadData]);
 
   const dataByDate = useMemo(() => {
@@ -50,6 +58,9 @@ export default function CalendarioRemunerados() {
 
   const handleModalDataChange = () => {
     loadData(currentMonth);
+    if (onMonthChangeRef.current) {
+      onMonthChangeRef.current(new Date(currentMonth.getTime()));
+    }
   };
 
   const handlePrevMonth = () => setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -75,7 +86,7 @@ export default function CalendarioRemunerados() {
   const emptyDays = Array.from({ length: firstDayOfMonth }, (_, i) => i);
 
   const getColorClass = (record) => {
-    if (!record || record.vagas_totais === 0) return 'bg-gray-200';
+    if (!record || record.ativa === false || record.vagas_totais === 0) return 'bg-gray-200';
     if (record.vagas_ocupadas >= record.vagas_totais) return 'bg-red-500';
     if (record.vagas_ocupadas === record.vagas_totais - 1) return 'bg-amber-400';
     return 'bg-emerald-500';
@@ -189,7 +200,11 @@ export default function CalendarioRemunerados() {
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p className="font-bold">DIURNO (RD)</p>
-                                <p className="text-xs">Ocupadas: {rd.vagas_ocupadas}/{rd.vagas_totais}</p>
+                                {rd.ativa === false || rd.vagas_totais === 0 ? (
+                                  <p className="text-xs text-red-500 font-bold">BLOQUEADO / INDISPONÍVEL</p>
+                                ) : (
+                                  <p className="text-xs">Ocupadas: {rd.vagas_ocupadas}/{rd.vagas_totais}</p>
+                                )}
                               </TooltipContent>
                             </Tooltip>
                           )}
@@ -200,7 +215,11 @@ export default function CalendarioRemunerados() {
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p className="font-bold">NOTURNO (RN)</p>
-                                <p className="text-xs">Ocupadas: {rn.vagas_ocupadas}/{rn.vagas_totais}</p>
+                                {rn.ativa === false || rn.vagas_totais === 0 ? (
+                                  <p className="text-xs text-red-500 font-bold">BLOQUEADO / INDISPONÍVEL</p>
+                                ) : (
+                                  <p className="text-xs">Ocupadas: {rn.vagas_ocupadas}/{rn.vagas_totais}</p>
+                                )}
                               </TooltipContent>
                             </Tooltip>
                           )}

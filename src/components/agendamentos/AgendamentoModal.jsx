@@ -317,8 +317,9 @@ const AgendamentoModal = ({ onSuccess }) => {
 
     if (status.validade && formData.data_visita) {
       const dataVisita = new Date(`${formData.data_visita}T00:00:00`);
-      // Truncar a data de validade para comparar apenas a data (sem horas)
-      const dataValidade = new Date(status.validade);
+      // Extrai apenas YYYY-MM-DD do timestamp UTC para não sofrer conversão de fuso.
+      // Ex: "2026-07-24 00:00:00+00" em UTC-3 viraria 23/07 às 21h → setHours → 23/07.
+      const dataValidade = new Date((status.validade || '').substring(0, 10) + 'T00:00:00');
       dataValidade.setHours(0, 0, 0, 0);
 
       if (dataVisita > dataValidade) {
